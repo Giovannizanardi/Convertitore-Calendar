@@ -8,7 +8,7 @@ import type { Part } from "@google/genai";
 export type ApiEventObject = Omit<EventObject, 'id'>;
 
 const getAiClient = () => {
-    const API_KEY = process.env.API_KEY;
+    const API_KEY = import.meta.env.VITE_API_KEY;
     if (!API_KEY) {
         // This will be caught by the try/catch in App.tsx
         throw new Error("La variabile d'ambiente API_KEY non è impostata. Assicurati che sia configurata correttamente nelle impostazioni del tuo hosting (es. Vercel).");
