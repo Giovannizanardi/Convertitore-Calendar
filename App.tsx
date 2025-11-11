@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import { Header } from './components/Header';
 import { FileUpload } from './components/FileUpload';
 import { Loader } from './components/Loader';
@@ -9,8 +10,6 @@ import type { ValidatedEvent } from './lib/types';
 import { GoogleCalendarImporter } from './components/GoogleCalendarImporter';
 import { toDDMMYYYY } from './lib/dateUtils';
 import { ArrowLeftIcon } from './components/Icons';
-
-declare var XLSX: any;
 
 type AppStep = 'upload' | 'preview' | 'result';
 type InputMethod = 'file' | 'text';

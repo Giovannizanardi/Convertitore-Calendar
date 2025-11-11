@@ -8,10 +8,13 @@ import type { Part } from "@google/genai";
 export type ApiEventObject = Omit<EventObject, 'id'>;
 
 const getAiClient = () => {
-    const API_KEY = import.meta.env.VITE_API_KEY;
+    // Per le applicazioni Vite, le variabili d'ambiente vengono esposte tramite `import.meta.env`
+    // e devono essere prefissate con `VITE_`.
+    // Fix: In base alle linee guida di @google/genai, la chiave API deve essere ottenuta da process.env.API_KEY. Questo risolve l'errore TypeScript su `import.meta.env`.
+    const API_KEY = process.env.API_KEY;
     if (!API_KEY) {
-        // This will be caught by the try/catch in App.tsx
-        throw new Error("La variabile d'ambiente API_KEY non è impostata. Assicurati che sia configurata correttamente nelle impostazioni del tuo hosting (es. Vercel).");
+        // Questo errore verrà catturato dal blocco try/catch in App.tsx.
+        throw new Error("La variabile d'ambiente API_KEY non è impostata. Assicurati che sia configurata nell'ambiente di esecuzione.");
     }
     return new GoogleGenAI({ apiKey: API_KEY });
 };
@@ -32,8 +35,9 @@ const eventSchema = {
 
 const getExtractionPrompt = (): string => {
   const currentYear = new Date().getFullYear();
+  // Fix: Testo del prompt reso più generico per funzionare sia con file che con testo incollato.
   return `
-Sei un assistente intelligente per l'estrazione di dati. Il tuo compito è analizzare il contenuto del file fornito ed estrarre tutti gli eventi in un formato JSON strutturato conforme allo schema fornito.
+Sei un assistente intelligente per l'estrazione di dati. Il tuo compito è analizzare il contenuto fornito ed estrarre tutti gli eventi in un formato JSON strutturato conforme allo schema fornito.
 
 Segui queste regole con precisione:
 1.  Il tuo output DEVE essere un array JSON valido di oggetti evento. Non includere altro testo, spiegazioni o formattazione markdown.
@@ -50,7 +54,8 @@ Segui queste regole con precisione:
 };
 
 // Helper function to convert file to a Part object for Gemini
-const fileToGenerativePart = async (file: File) => {
+// Fix: Aggiunto il tipo di ritorno `Promise<Part>` per una maggiore sicurezza dei tipi.
+const fileToGenerativePart = async (file: File): Promise<Part> => {
     const base64EncodedData = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve((reader.result as string).split(',')[1]);
@@ -66,26 +71,24 @@ const fileToGenerativePart = async (file: File) => {
     };
   };
 
+// Fix: Rifattorizzazione per utilizzare `systemInstruction` per le istruzioni del modello e `contents` solo per i dati dell'utente (testo o file), in linea con le migliori pratiche.
 export const extractEvents = async (input: File | string): Promise<ApiEventObject[]> => {
   const ai = getAiClient();
   if (!input) {
     throw new Error("L'input non può essere vuoto.");
   }
   
-  let contentPart: Part;
+  const contents: string | Part[] = typeof input === 'string'
+    ? input
+    : [await fileToGenerativePart(input)];
 
-  if (typeof input === 'string') {
-    contentPart = { text: input };
-  } else {
-    contentPart = await fileToGenerativePart(input);
-  }
-  
-  const prompt = getExtractionPrompt();
+  const systemInstruction = getExtractionPrompt();
 
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
-    contents: { parts: [{text: prompt}, contentPart] },
+    contents,
     config: {
+        systemInstruction,
         responseMimeType: "application/json",
         responseSchema: {
             type: Type.ARRAY,
@@ -107,16 +110,11 @@ export const extractEvents = async (input: File | string): Promise<ApiEventObjec
   }
 };
 
+// Fix: Rifattorizzazione per separare le istruzioni (systemInstruction) dai dati (contents) per una migliore strutturazione del prompt e un allineamento con le linee guida.
 export const suggestCorrection = async (event: EventObject, fieldToCorrect: keyof Omit<EventObject, 'id'>): Promise<string | null> => {
   const ai = getAiClient();
-  const prompt = `
-Sei un assistente intelligente per la correzione dei dati. Dato il seguente evento in formato JSON, il tuo compito è correggere un campo specifico che è stato contrassegnato come non valido. Fornisci una correzione plausibile per il campo specificato.
-
-Dati originali dell'evento:
-${JSON.stringify(event, null, 2)}
-
-Il campo da correggere è: "${fieldToCorrect}".
-Il valore non valido corrente è: "${event[fieldToCorrect]}".
+  const systemInstruction = `
+Sei un assistente intelligente per la correzione dei dati. Il tuo compito è correggere un campo specifico che è stato contrassegnato come non valido. Fornisci una correzione plausibile per il campo specificato.
 
 Basandoti sul contesto dell'intero evento, suggerisci un valore corretto.
 - Per le date (startDate, endDate), usa rigorosamente il formato GG-MM-AAAA.
@@ -125,12 +123,20 @@ Basandoti sul contesto dell'intero evento, suggerisci un valore corretto.
 
 Restituisci SOLO un oggetto JSON con una singola chiave "suggestion" contenente il valore stringa corretto. Non includere altro testo o markdown.
 `;
+  const userPrompt = `
+Dati originali dell'evento:
+${JSON.stringify(event, null, 2)}
+
+Il campo da correggere è: "${fieldToCorrect}".
+Il valore non valido corrente è: "${event[fieldToCorrect]}".
+`;
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: { parts: [{ text: prompt }] },
+      contents: userPrompt,
       config: {
+        systemInstruction,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
