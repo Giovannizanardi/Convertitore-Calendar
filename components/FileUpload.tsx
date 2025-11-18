@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UploadCloudIcon, FileTextIcon, XIcon } from './Icons';
+import { Loader } from './Loader';
 
 interface FileUploadProps {
   onFilesChange: (files: File[]) => void;
@@ -46,11 +47,25 @@ const FilePreview: React.FC<{ file: File }> = ({ file }) => {
 
 export const FileUpload: React.FC<FileUploadProps> = ({ onFilesChange, files, disabled }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Questo effetto viene eseguito quando il genitore ha aggiornato l'array `files`.
+    // Ora è sicuro disattivare l'indicatore di caricamento e mostrare le anteprime.
+    setIsProcessing(false);
+  }, [files]);
+
+  const handleNewFiles = (newFiles: File[]) => {
+      if (newFiles.length > 0) {
+          setIsProcessing(true); // Mostra subito il loader
+          onFilesChange(newFiles); // Notifica al genitore di aggiornare il suo stato
+      }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      onFilesChange(Array.from(e.target.files));
+      handleNewFiles(Array.from(e.target.files));
     }
   };
 
@@ -76,7 +91,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesChange, files, di
     e.stopPropagation();
     setIsDragging(false);
     if (!disabled && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      onFilesChange(Array.from(e.dataTransfer.files));
+      handleNewFiles(Array.from(e.dataTransfer.files));
     }
   };
   
@@ -85,6 +100,20 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesChange, files, di
   }
 
   const acceptedFormats = ".txt, .csv, .doc, .docx, .xls, .xlsx, .pdf, .png, .jpg, .jpeg, .webp";
+
+  // Nuova vista per lo stato di caricamento
+  if (isProcessing) {
+      return (
+          <div className="relative bg-secondary/50 border-2 border-dashed border-border rounded-lg p-10 text-center transition-all duration-300 ease-in-out">
+              <div className="flex flex-col items-center justify-center space-y-4">
+                  <Loader className="h-12 w-12 text-primary" />
+                  <p className="font-semibold text-foreground/90">Caricamento in corso...</p>
+                  <p className="text-xs text-muted-foreground">Preparazione anteprime file...</p>
+              </div>
+          </div>
+      );
+  }
+
 
   if (files.length > 0 && !disabled) {
     return (

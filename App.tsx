@@ -9,7 +9,7 @@ import { validateEvents } from './lib/validation';
 import type { ValidatedEvent } from './lib/types';
 import { GoogleCalendarImporter } from './components/GoogleCalendarImporter';
 import { toDDMMYYYY } from './lib/dateUtils';
-import { ArrowLeftIcon } from './components/Icons';
+import { ArrowLeftIcon, RefreshCwIcon } from './components/Icons';
 import { ThemeCustomizer } from './components/ThemeCustomizer';
 import metadata from './metadata.json';
 
@@ -42,6 +42,14 @@ async function parseExcelToCsv(file: File): Promise<string> {
   });
 }
 
+const loadingMessages = [
+  "Analisi del contenuto in corso...",
+  "Identificazione degli eventi nei dati forniti...",
+  "Estrazione di date, orari e luoghi...",
+  "Strutturazione dei dati per l'anteprima...",
+  "Quasi pronto, l'IA sta finalizzando l'elaborazione...",
+];
+
 export default function App() {
   const [files, setFiles] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -54,6 +62,7 @@ export default function App() {
   const [description, setDescription] = useState<string>('Caricamento...');
   const [appName, setAppName] = useState<string>('');
   const [isThemeCustomizerOpen, setThemeCustomizerOpen] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState<string>(loadingMessages[0]);
 
 
   useEffect(() => {
@@ -66,6 +75,25 @@ export default function App() {
       setAppName("ForMa - Convertitore di Eventi per Google Calendar");
     }
   }, []);
+
+  useEffect(() => {
+    let intervalId: number | undefined;
+
+    if (isLoading) {
+      let messageIndex = 0;
+      setLoadingMessage(loadingMessages[0]); // Imposta il messaggio iniziale immediatamente
+      intervalId = window.setInterval(() => {
+        messageIndex = (messageIndex + 1) % loadingMessages.length;
+        setLoadingMessage(loadingMessages[messageIndex]);
+      }, 3000); // Cambia messaggio ogni 3 secondi
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [isLoading]);
 
   const handleFilesChange = useCallback((selectedFiles: File[]) => {
     setFiles(selectedFiles);
@@ -200,15 +228,27 @@ export default function App() {
       return (
         <div className="mt-8 flex flex-col items-center justify-center space-y-4">
           <Loader />
-          <p className="text-muted-foreground animate-pulse">L'IA sta elaborando i tuoi dati... potrebbe volerci un momento.</p>
+          <p key={loadingMessage} className="text-muted-foreground animate-fade-in">{loadingMessage}</p>
         </div>
       );
     }
     
     if (error && !isLoading) {
+       const isRetryable = error.includes('attualmente sovraccarico o non disponibile');
        return (
          <div className="mt-6 bg-destructive/10 border border-destructive/30 text-destructive-foreground/80 px-4 py-3 rounded-lg text-center">
             <p><strong>Errore:</strong> {error}</p>
+            {isRetryable && (
+              <div className="mt-4">
+                <button
+                    onClick={handleProcess}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-2 px-6 rounded-full transition-colors flex items-center justify-center mx-auto space-x-2"
+                >
+                    <RefreshCwIcon className="h-4 w-4" />
+                    <span>Riprova</span>
+                </button>
+              </div>
+            )}
          </div>
        );
     }

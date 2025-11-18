@@ -8,10 +8,11 @@ import type { Part } from "@google/genai";
 export type ApiEventObject = Omit<EventObject, 'id'>;
 
 const getAiClient = () => {
-    // FIX: Utilizza import.meta.env.VITE_API_KEY come previsto dalla configurazione di Vite e dal README.md.
-    const API_KEY = import.meta.env.VITE_API_KEY;
+    // FIX: Updated to use process.env.API_KEY as required by the guidelines.
+    // This resolves the type error on 'import.meta.env'.
+    const API_KEY = process.env.API_KEY;
     if (!API_KEY) {
-        throw new Error("La variabile d'ambiente VITE_API_KEY non è impostata. Assicurati che sia configurata nel tuo file .env.");
+        throw new Error("La variabile d'ambiente API_KEY non è impostata. Assicurati che sia configurata nel tuo file .env.");
     }
     return new GoogleGenAI({ apiKey: API_KEY });
 };
@@ -73,9 +74,12 @@ export const extractEvents = async (input: File | string): Promise<ApiEventObjec
   try {
     const ai = getAiClient();
     
-    const contents: string | Part[] = typeof input === 'string'
-      ? input
-      : [await fileToGenerativePart(input)];
+    // FIX: The `contents` for `generateContent` must be of type `Content` or `Part[]`, not `Content[]`.
+    // This change ensures a valid `Content` object is created for both string and file inputs,
+    // resolving the type error and the incorrect payload structure for files.
+    const contents = typeof input === 'string'
+      ? { parts: [{ text: input }] }
+      : { parts: [await fileToGenerativePart(input)] };
 
     const systemInstruction = getExtractionPrompt();
 
