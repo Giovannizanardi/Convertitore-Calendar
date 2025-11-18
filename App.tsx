@@ -11,6 +11,7 @@ import { GoogleCalendarImporter } from './components/GoogleCalendarImporter';
 import { toDDMMYYYY } from './lib/dateUtils';
 import { ArrowLeftIcon } from './components/Icons';
 import { ThemeCustomizer } from './components/ThemeCustomizer';
+import metadata from './metadata.json';
 
 type AppStep = 'upload' | 'preview' | 'result';
 type InputMethod = 'file' | 'text';
@@ -56,22 +57,14 @@ export default function App() {
 
 
   useEffect(() => {
-    fetch('./metadata.json')
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
-        return response.json();
-      })
-      .then(data => {
-        setDescription(data.description || '');
-        setAppName(data.name || '');
-      })
-      .catch(err => {
-        console.error("Impossibile caricare i metadati dell'app:", err);
-        setDescription("Un'applicazione intelligente per estrarre eventi da file e importarli in Google Calendar.");
-        setAppName("ForMa - Convertitore di Eventi per Google Calendar");
-      });
+    if (metadata) {
+      setDescription(metadata.description || '');
+      setAppName(metadata.name || '');
+    } else {
+      console.error("Impossibile caricare i metadati dell'app tramite import.");
+      setDescription("Un'applicazione intelligente per estrarre eventi da file e importarli in Google Calendar.");
+      setAppName("ForMa - Convertitore di Eventi per Google Calendar");
+    }
   }, []);
 
   const handleFilesChange = useCallback((selectedFiles: File[]) => {
