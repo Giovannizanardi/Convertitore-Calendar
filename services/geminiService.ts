@@ -8,11 +8,11 @@ import type { Part } from "@google/genai";
 export type ApiEventObject = Omit<EventObject, 'id'>;
 
 const getAiClient = () => {
-    // FIX: Updated to use process.env.API_KEY as required by the guidelines.
-    // This resolves the type error on 'import.meta.env'.
+    // FIX: Switched from `import.meta.env.VITE_API_KEY` to `process.env.API_KEY`
+    // to align with the updated coding guidelines for accessing the API key.
     const API_KEY = process.env.API_KEY;
     if (!API_KEY) {
-        throw new Error("La variabile d'ambiente API_KEY non è impostata. Assicurati che sia configurata nel tuo file .env.");
+        throw new Error("The API_KEY environment variable is not set. Please ensure it is configured.");
     }
     return new GoogleGenAI({ apiKey: API_KEY });
 };
