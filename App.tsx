@@ -127,10 +127,12 @@ export default function App() {
   };
 
 
-  const handleProcess = async () => {
-    setIsLoading(true);
-    setError('');
-    setEvents([]);
+  const handleProcess = async (retryAttempt = 0) => {
+    if (retryAttempt === 0) {
+        setIsLoading(true);
+        setError('');
+        setEvents([]);
+    }
 
     try {
         let extractedEvents: ApiEventObject[] = [];
@@ -141,7 +143,6 @@ export default function App() {
                 setIsLoading(false);
                 return;
             }
-            // Process all files in parallel
             const results = await Promise.all(files.map(async (file) => {
                 let processedInput: File | string;
                 const fileExtension = file.name.split('.').pop()?.toLowerCase();
@@ -163,8 +164,7 @@ export default function App() {
             }
             extractedEvents = await extractEvents(pastedText);
         }
-
-      // Add a unique ID and convert date format for display
+      
       const eventsWithId = extractedEvents.map((event, index) => ({
          ...event,
          id: index,
@@ -174,13 +174,23 @@ export default function App() {
       setEvents(validateEvents(eventsWithId));
       setSelectedEvents(new Set());
       setStep('preview');
-    } catch (err: any) {
-      console.error(err);
-      // Mantieni i file/testo dell'utente in caso di errore API, permettendo di riprovare.
-      setError(err.message || "Si è verificato un errore durante l'elaborazione. Il modello IA potrebbe non essere in grado di elaborare questo formato di file o il suo contenuto.");
-      setStep('upload');
-    } finally {
       setIsLoading(false);
+      setError(''); // Pulisce eventuali messaggi di riprova
+    } catch (err: any) {
+        const isOverloadError = err.message?.includes('sovraccarico o non disponibile');
+        const MAX_RETRIES = 3;
+        const RETRY_DELAY = 7000;
+
+        if (isOverloadError && retryAttempt < MAX_RETRIES) {
+            const nextAttempt = retryAttempt + 1;
+            setError(`Servizio sovraccarico. Riprovo tra ${RETRY_DELAY / 1000} secondi... (Tentativo ${nextAttempt} di ${MAX_RETRIES})`);
+            setTimeout(() => handleProcess(nextAttempt), RETRY_DELAY);
+        } else {
+            console.error(err);
+            setError(err.message || "Si è verificato un errore durante l'elaborazione. Il modello IA potrebbe non essere in grado di elaborare questo formato di file o il suo contenuto.");
+            setStep('upload');
+            setIsLoading(false);
+        }
     }
   };
 
@@ -228,7 +238,7 @@ export default function App() {
       return (
         <div className="mt-8 flex flex-col items-center justify-center space-y-4">
           <Loader />
-          <p key={loadingMessage} className="text-muted-foreground animate-fade-in">{loadingMessage}</p>
+          <p key={error || loadingMessage} className="text-muted-foreground animate-fade-in text-center">{error || loadingMessage}</p>
         </div>
       );
     }
@@ -241,7 +251,7 @@ export default function App() {
             {isRetryable && (
               <div className="mt-4">
                 <button
-                    onClick={handleProcess}
+                    onClick={() => handleProcess()}
                     className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-2 px-6 rounded-full transition-colors flex items-center justify-center mx-auto space-x-2"
                 >
                     <RefreshCwIcon className="h-4 w-4" />
@@ -295,7 +305,7 @@ export default function App() {
             {canProcess && (
               <div className="mt-8 text-center">
                 <button
-                  onClick={handleProcess}
+                  onClick={() => handleProcess()}
                   disabled={isLoading}
                   className="bg-primary hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed text-primary-foreground font-bold py-3 px-8 rounded-full shadow-lg shadow-primary/20 transform hover:scale-105 transition-all duration-300 ease-in-out"
                 >

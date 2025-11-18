@@ -7,14 +7,11 @@ import type { Part } from "@google/genai";
 // It will be added in App.tsx after receiving the data.
 export type ApiEventObject = Omit<EventObject, 'id'>;
 
+// FIX: As per the guidelines, the API key must be obtained from `process.env.API_KEY`.
+// This resolves the TypeScript error `Property 'env' does not exist on type 'ImportMeta'`
+// and aligns with the requirement to use the environment variable directly.
 const getAiClient = () => {
-    // Utilizza import.meta.env.VITE_API_KEY per accedere alla chiave API in un ambiente Vite,
-    // come specificato nel README.md del progetto.
-    const API_KEY = import.meta.env.VITE_API_KEY;
-    if (!API_KEY) {
-        throw new Error("La variabile d'ambiente VITE_API_KEY non è impostata. Assicurati che sia configurata nel tuo file .env.");
-    }
-    return new GoogleGenAI({ apiKey: API_KEY });
+    return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 const eventSchema = {
