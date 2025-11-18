@@ -1,49 +1,115 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-
-type Theme = "dark" | "light" | "blue";
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { defaultThemes, type ThemeDefinition } from '../lib/themes';
 
 type ThemeProviderProps = {
-  // Fix: The 'children' prop is made optional. In JSX, children are not passed as object properties,
-  // which caused a type error when 'children' was required. This change aligns the type
-  // with how React handles children props.
   children?: React.ReactNode;
-  defaultTheme?: Theme;
-  storageKey?: string;
+  defaultThemeName?: string;
+  activeThemeStorageKey?: string;
+  themesStorageKey?: string;
 };
 
 type ThemeProviderState = {
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
+  themes: ThemeDefinition[];
+  activeTheme: ThemeDefinition | undefined;
+  setTheme: (themeName: string) => void;
+  updateTheme: (themeName: string, colors: Record<string, string>) => void;
+  addTheme: (newTheme: ThemeDefinition) => void;
+  deleteTheme: (themeName: string) => void;
+  resetTheme: (themeName: string) => void;
 };
 
 const initialState: ThemeProviderState = {
-  theme: 'dark',
+  themes: defaultThemes,
+  activeTheme: defaultThemes[0],
   setTheme: () => null,
+  updateTheme: () => null,
+  addTheme: () => null,
+  deleteTheme: () => null,
+  resetTheme: () => null,
 };
 
 const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
 
 export function ThemeProvider({
   children,
-  defaultTheme = 'dark',
-  storageKey = 'vite-ui-theme',
+  defaultThemeName = 'dark',
+  activeThemeStorageKey = 'forma-theme-active',
+  themesStorageKey = 'forma-themes',
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
+  
+  const [themes, setThemes] = useState<ThemeDefinition[]>(() => {
+    try {
+      const storedThemes = localStorage.getItem(themesStorageKey);
+      // FIX: Cast the result of JSON.parse to handle stricter TypeScript configurations where it returns 'unknown'.
+      return storedThemes ? (JSON.parse(storedThemes) as ThemeDefinition[]) : defaultThemes;
+    } catch (e) {
+      console.error("Failed to parse themes from localStorage", e);
+      return defaultThemes;
+    }
+  });
+
+  const [activeThemeName, setActiveThemeName] = useState<string>(
+    () => localStorage.getItem(activeThemeStorageKey) || defaultThemeName
   );
+  
+  const activeTheme = themes.find(t => t.name === activeThemeName);
 
   useEffect(() => {
+    localStorage.setItem(themesStorageKey, JSON.stringify(themes));
+  }, [themes, themesStorageKey]);
+
+
+  useEffect(() => {
+    if (!activeTheme) return;
     const root = window.document.documentElement;
-    root.classList.remove('theme-dark', 'theme-light', 'theme-blue');
-    root.classList.add(`theme-${theme}`);
-  }, [theme]);
+    
+    // Rimuove stili precedenti per evitare conflitti
+    Object.keys(defaultThemes[0].colors).forEach(key => {
+        root.style.removeProperty(key);
+    });
+
+    Object.entries(activeTheme.colors).forEach(([property, value]) => {
+        root.style.setProperty(property, value);
+    });
+  }, [activeTheme]);
+
+  const setTheme = useCallback((themeName: string) => {
+    localStorage.setItem(activeThemeStorageKey, themeName);
+    setActiveThemeName(themeName);
+  }, [activeThemeStorageKey]);
+
+  const updateTheme = useCallback((themeName: string, colors: Record<string, string>) => {
+    setThemes(prevThemes => prevThemes.map(t => t.name === themeName ? { ...t, colors } : t));
+  }, []);
+
+  const addTheme = useCallback((newTheme: ThemeDefinition) => {
+    setThemes(prev => [...prev, newTheme]);
+  }, []);
+  
+  const deleteTheme = useCallback((themeName: string) => {
+    setThemes(prev => prev.filter(t => t.name !== themeName));
+    // Se il tema attivo viene eliminato, torna al tema predefinito
+    if (activeThemeName === themeName) {
+        setTheme(defaultThemeName);
+    }
+  }, [activeThemeName, defaultThemeName, setTheme]);
+
+  const resetTheme = useCallback((themeName: string) => {
+    const originalTheme = defaultThemes.find(t => t.name === themeName);
+    if (originalTheme) {
+        setThemes(prev => prev.map(t => t.name === themeName ? originalTheme : t));
+    }
+  }, []);
+
 
   const value = {
-    theme,
-    setTheme: (theme: Theme) => {
-      localStorage.setItem(storageKey, theme);
-      setTheme(theme);
-    },
+    themes,
+    activeTheme,
+    setTheme,
+    updateTheme,
+    addTheme,
+    deleteTheme,
+    resetTheme,
   };
 
   return (

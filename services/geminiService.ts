@@ -8,12 +8,8 @@ import type { Part } from "@google/genai";
 export type ApiEventObject = Omit<EventObject, 'id'>;
 
 const getAiClient = () => {
-    // Per le applicazioni Vite, le variabili d'ambiente vengono esposte tramite `import.meta.env`
-    // e devono essere prefissate con `VITE_`.
-    // Fix: In base alle linee guida di @google/genai, la chiave API deve essere ottenuta da process.env.API_KEY. Questo risolve l'errore TypeScript su `import.meta.env`.
     const API_KEY = process.env.API_KEY;
     if (!API_KEY) {
-        // Questo errore verrà catturato dal blocco try/catch in App.tsx.
         throw new Error("La variabile d'ambiente API_KEY non è impostata. Assicurati che sia configurata nell'ambiente di esecuzione.");
     }
     return new GoogleGenAI({ apiKey: API_KEY });
@@ -35,7 +31,6 @@ const eventSchema = {
 
 const getExtractionPrompt = (): string => {
   const currentYear = new Date().getFullYear();
-  // Fix: Testo del prompt reso più generico per funzionare sia con file che con testo incollato.
   return `
 Sei un assistente intelligente per l'estrazione di dati. Il tuo compito è analizzare il contenuto fornito ed estrarre tutti gli eventi in un formato JSON strutturato conforme allo schema fornito.
 
@@ -44,7 +39,7 @@ Segui queste regole con precisione:
 2.  Estrai i seguenti campi per ogni evento: subject, startDate, startTime, endDate, endTime, description, location.
 3.  Sii molto flessibile con i formati di data e ora di input (es. GG/MM/AAAA, MM-GG-AAAA, AAAA.MM.GG, Mese GG, AAAA, 2pm, 14:00).
 4.  Quando fornisci le date, normalizzale rigorosamente nel formato AAAA-MM-GG.
-5.  Quando fornisci gli orari, normalizzali rigorosamente nel formato HH:mm (24 ore).
+5.  Quando fornisci gli orari, normalizzale rigorosamente nel formato HH:mm (24 ore).
 6.  Se un anno non è specificato per una data, supponi che l'anno corrente sia ${currentYear}.
 7.  Se l'orario di fine o la durata di un evento non sono specificati, calcola un orario di fine che sia esattamente 1 ora dopo l'orario di inizio.
 8.  Se una data di fine non è specificata, supponi che sia la stessa della data di inizio.
@@ -53,8 +48,6 @@ Segui queste regole con precisione:
 `;
 };
 
-// Helper function to convert file to a Part object for Gemini
-// Fix: Aggiunto il tipo di ritorno `Promise<Part>` per una maggiore sicurezza dei tipi.
 const fileToGenerativePart = async (file: File): Promise<Part> => {
     const base64EncodedData = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -71,46 +64,55 @@ const fileToGenerativePart = async (file: File): Promise<Part> => {
     };
   };
 
-// Fix: Rifattorizzazione per utilizzare `systemInstruction` per le istruzioni del modello e `contents` solo per i dati dell'utente (testo o file), in linea con le migliori pratiche.
 export const extractEvents = async (input: File | string): Promise<ApiEventObject[]> => {
-  const ai = getAiClient();
   if (!input) {
     throw new Error("L'input non può essere vuoto.");
   }
-  
-  const contents: string | Part[] = typeof input === 'string'
-    ? input
-    : [await fileToGenerativePart(input)];
 
-  const systemInstruction = getExtractionPrompt();
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents,
-    config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema: {
-            type: Type.ARRAY,
-            items: eventSchema
-        }
-    }
-  });
-  
   try {
-    const jsonText = response.text.trim();
-    if (!jsonText) {
-      return [];
+    const ai = getAiClient();
+    
+    const contents: string | Part[] = typeof input === 'string'
+      ? input
+      : [await fileToGenerativePart(input)];
+
+    const systemInstruction = getExtractionPrompt();
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents,
+      config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+          responseSchema: {
+              type: Type.ARRAY,
+              items: eventSchema
+          }
+      }
+    });
+    
+    try {
+      const jsonText = response.text.trim();
+      if (!jsonText) {
+        return [];
+      }
+      const parsedEvents: ApiEventObject[] = JSON.parse(jsonText);
+      return parsedEvents;
+    } catch (e) {
+        console.error("Impossibile analizzare la risposta JSON dall'IA:", response.text);
+        throw new Error("Il modello IA ha restituito una struttura dati non valida. Controlla il contenuto del file e riprova.");
     }
-    const parsedEvents: ApiEventObject[] = JSON.parse(jsonText);
-    return parsedEvents;
-  } catch (e) {
-      console.error("Impossibile analizzare la risposta JSON dall'IA:", response.text);
-      throw new Error("Il modello IA ha restituito una struttura dati non valida. Controlla il contenuto del file e riprova.");
+  } catch (err: any) {
+      console.error("Errore API Gemini:", err);
+      // Controlla errori specifici come sovraccarico o indisponibilità
+      if (err.message && (err.message.includes('503') || /overload|unavailable|rate limit/i.test(err.message))) {
+          throw new Error("Il servizio di intelligenza artificiale è attualmente sovraccarico o non disponibile. Per favore, attendi un momento e riprova.");
+      }
+      // Lancia un errore più generico per altri problemi API
+      throw new Error("Si è verificato un errore di comunicazione con il servizio AI. Controlla la tua connessione o la configurazione della chiave API.");
   }
 };
 
-// Fix: Rifattorizzazione per separare le istruzioni (systemInstruction) dai dati (contents) per una migliore strutturazione del prompt e un allineamento con le linee guida.
 export const suggestCorrection = async (event: EventObject, fieldToCorrect: keyof Omit<EventObject, 'id'>): Promise<string | null> => {
   const ai = getAiClient();
   const systemInstruction = `

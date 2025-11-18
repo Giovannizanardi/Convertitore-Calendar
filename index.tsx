@@ -11,7 +11,11 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <ThemeProvider defaultTheme="dark" storageKey="forma-theme">
+    <ThemeProvider 
+      defaultThemeName="dark" 
+      activeThemeStorageKey="forma-theme-active"
+      themesStorageKey="forma-themes"
+    >
       <App />
     </ThemeProvider>
   </React.StrictMode>

@@ -10,6 +10,7 @@ import type { ValidatedEvent } from './lib/types';
 import { GoogleCalendarImporter } from './components/GoogleCalendarImporter';
 import { toDDMMYYYY } from './lib/dateUtils';
 import { ArrowLeftIcon } from './components/Icons';
+import { ThemeCustomizer } from './components/ThemeCustomizer';
 
 type AppStep = 'upload' | 'preview' | 'result';
 type InputMethod = 'file' | 'text';
@@ -51,6 +52,8 @@ export default function App() {
   const [pastedText, setPastedText] = useState<string>('');
   const [description, setDescription] = useState<string>('Caricamento...');
   const [appName, setAppName] = useState<string>('');
+  const [isThemeCustomizerOpen, setThemeCustomizerOpen] = useState(false);
+
 
   useEffect(() => {
     fetch('./metadata.json')
@@ -152,6 +155,7 @@ export default function App() {
       setStep('preview');
     } catch (err: any) {
       console.error(err);
+      // Mantieni i file/testo dell'utente in caso di errore API, permettendo di riprovare.
       setError(err.message || "Si è verificato un errore durante l'elaborazione. Il modello IA potrebbe non essere in grado di elaborare questo formato di file o il suo contenuto.");
       setStep('upload');
     } finally {
@@ -203,7 +207,7 @@ export default function App() {
       return (
         <div className="mt-8 flex flex-col items-center justify-center space-y-4">
           <Loader />
-          <p className="text-muted-foreground animate-pulse">L'IA sta elaborando i tuoi file... potrebbe volerci un momento.</p>
+          <p className="text-muted-foreground animate-pulse">L'IA sta elaborando i tuoi dati... potrebbe volerci un momento.</p>
         </div>
       );
     }
@@ -318,11 +322,21 @@ export default function App() {
   return (
     <div className="min-h-screen text-foreground p-4 sm:p-6 lg:p-8 flex flex-col items-center">
       <div className="w-full max-w-7xl mx-auto">
-        <Header onReset={() => handleReset(true)} hasContent={hasContent} description={description} appName={appName} />
+        <Header 
+          onReset={() => handleReset(true)} 
+          hasContent={hasContent} 
+          description={description} 
+          appName={appName}
+          onCustomizeTheme={() => setThemeCustomizerOpen(true)}
+        />
         <main className="mt-8">
           {CurrentStepComponent()}
         </main>
       </div>
+      <ThemeCustomizer 
+        isOpen={isThemeCustomizerOpen} 
+        onClose={() => setThemeCustomizerOpen(false)} 
+      />
     </div>
   );
 }
