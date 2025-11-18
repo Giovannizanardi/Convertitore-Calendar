@@ -69,7 +69,8 @@ export function ThemeProvider({
     });
 
     Object.entries(activeTheme.colors).forEach(([property, value]) => {
-        root.style.setProperty(property, value);
+        // FIX: The `value` from `Object.entries` is inferred as `unknown` in some strict TypeScript configurations, making it unassignable to `setProperty`'s string parameter. Casting to `string` resolves this.
+        root.style.setProperty(property, value as string);
     });
   }, [activeTheme]);
 
