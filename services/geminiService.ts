@@ -7,11 +7,14 @@ import type { Part } from "@google/genai";
 // It will be added in App.tsx after receiving the data.
 export type ApiEventObject = Omit<EventObject, 'id'>;
 
-// FIX: As per the guidelines, the API key must be obtained from `process.env.API_KEY`.
-// This resolves the TypeScript error `Property 'env' does not exist on type 'ImportMeta'`
-// and aligns with the requirement to use the environment variable directly.
+// FIX: Correctly access the Vite environment variable as defined in the project's README.
+// This resolves the TypeScript error 'Cannot find name 'process''.
 const getAiClient = () => {
-    return new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = import.meta.env.VITE_API_KEY;
+    if (!apiKey) {
+        throw new Error("La variabile d'ambiente VITE_API_KEY non è impostata. Assicurati che sia configurata nel tuo file .env come descritto nel README.");
+    }
+    return new GoogleGenAI({ apiKey });
 };
 
 const eventSchema = {
@@ -71,9 +74,6 @@ export const extractEvents = async (input: File | string): Promise<ApiEventObjec
   try {
     const ai = getAiClient();
     
-    // FIX: The `contents` for `generateContent` must be of type `Content` or `Part[]`, not `Content[]`.
-    // This change ensures a valid `Content` object is created for both string and file inputs,
-    // resolving the type error and the incorrect payload structure for files.
     const contents = typeof input === 'string'
       ? { parts: [{ text: input }] }
       : { parts: [await fileToGenerativePart(input)] };
@@ -106,6 +106,10 @@ export const extractEvents = async (input: File | string): Promise<ApiEventObjec
     }
   } catch (err: any) {
       console.error("Errore API Gemini:", err);
+      // Passa attraverso il messaggio di errore specifico della chiave API.
+      if (err.message?.includes('VITE_API_KEY')) {
+          throw err;
+      }
       // Controlla errori specifici come sovraccarico o indisponibilità
       if (err.message && (err.message.includes('503') || /overload|unavailable|rate limit/i.test(err.message))) {
           throw new Error("Il servizio di intelligenza artificiale è attualmente sovraccarico o non disponibile. Per favore, attendi un momento e riprova.");
