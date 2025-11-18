@@ -8,11 +8,11 @@ import type { Part } from "@google/genai";
 export type ApiEventObject = Omit<EventObject, 'id'>;
 
 const getAiClient = () => {
-    // FIX: Switched from `import.meta.env.VITE_API_KEY` to `process.env.API_KEY`
-    // to align with the updated coding guidelines for accessing the API key.
-    const API_KEY = process.env.API_KEY;
+    // Utilizza import.meta.env.VITE_API_KEY per accedere alla chiave API in un ambiente Vite,
+    // come specificato nel README.md del progetto.
+    const API_KEY = import.meta.env.VITE_API_KEY;
     if (!API_KEY) {
-        throw new Error("The API_KEY environment variable is not set. Please ensure it is configured.");
+        throw new Error("La variabile d'ambiente VITE_API_KEY non è impostata. Assicurati che sia configurata nel tuo file .env.");
     }
     return new GoogleGenAI({ apiKey: API_KEY });
 };
