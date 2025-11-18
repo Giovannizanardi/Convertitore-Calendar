@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { ValidatedEvent, EventObject } from '../lib/types';
 import { validateEvent } from '../lib/validation';
 import { toYYYYMMDD } from '../lib/dateUtils';
-import { SparklesIcon, XIcon, Trash2Icon, ClockIcon } from './Icons';
+import { SparklesIcon, XIcon, ClockIcon } from './Icons';
 
 interface BulkActionsProps {
     selectedIds: Set<number>;

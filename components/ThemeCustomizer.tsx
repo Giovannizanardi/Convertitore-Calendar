@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { XIcon, Trash2Icon, RefreshCwIcon, PlusIcon } from './Icons'; // Assuming PlusIcon exists
 import type { ThemeDefinition } from '../lib/themes';
@@ -89,7 +89,7 @@ export const ThemeCustomizer: React.FC<ThemeCustomizerProps> = ({ isOpen, onClos
     const handleDelete = (themeName: string) => {
       if (window.confirm(`Sei sicuro di voler eliminare il tema "${selectedTheme?.label}"?`)) {
         deleteTheme(themeName);
-        setSelectedTheme(activeTheme);
+        setSelectedTheme(activeTheme || null);
       }
     };
     

@@ -3,7 +3,7 @@ import type { ValidatedEvent } from '../lib/types';
 import { generateCsvContent } from '../lib/csv';
 import { generateIcsContent } from '../lib/ics';
 import * as gcal from '../services/googleCalendarService';
-import { DownloadIcon, CheckCircleIcon, GoogleIcon, CalendarPlusIcon, XIcon, CalendarDaysIcon, JsonIcon } from './Icons';
+import { DownloadIcon, CheckCircleIcon, GoogleIcon, CalendarPlusIcon, CalendarDaysIcon, JsonIcon } from './Icons';
 import { Loader } from './Loader';
 
 interface GoogleCalendarImporterProps {
@@ -76,7 +76,7 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
         try {
             const calendarList = await gcal.listCalendars();
             setCalendars(calendarList);
-            const primaryCalendar = calendarList.find(c => c.primary) || calendarList[0];
+            const primaryCalendar = calendarList.find((c: Calendar) => c.primary) || calendarList[0];
             if (primaryCalendar) {
                 setSelectedCalendarId(primaryCalendar.id);
             }

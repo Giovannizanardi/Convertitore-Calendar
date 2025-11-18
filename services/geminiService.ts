@@ -92,7 +92,7 @@ export const extractEvents = async (input: File | string): Promise<ApiEventObjec
     });
     
     try {
-      const jsonText = response.text.trim();
+      const jsonText = (response.text ?? '').trim();
       if (!jsonText) {
         return [];
       }
@@ -150,7 +150,7 @@ Il valore non valido corrente è: "${event[fieldToCorrect]}".
       }
     });
 
-    const jsonText = response.text.trim();
+    const jsonText = (response.text ?? '').trim();
     if (!jsonText) {
       return null;
     }
