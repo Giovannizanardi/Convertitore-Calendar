@@ -1,3 +1,4 @@
+declare const process: any;
 import { GoogleGenAI, Type } from "@google/genai";
 import type { EventObject } from '../lib/types';
 import type { Part } from "@google/genai";
