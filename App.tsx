@@ -20,7 +20,7 @@ export default function App() {
   const renderPage = () => {
     switch (page) {
       case 'import':
-        return <ImportView />;
+        return <ImportView setPage={setPage} />;
       case 'cleanup':
         return <CleanupView setPage={setPage} />;
       case 'dashboard':

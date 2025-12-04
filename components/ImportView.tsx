@@ -13,6 +13,10 @@ import { ArrowLeftIcon, RefreshCwIcon } from './Icons';
 type AppStep = 'upload' | 'preview' | 'result';
 type InputMethod = 'file' | 'text';
 
+interface ImportViewProps {
+    setPage: (page: 'dashboard' | 'import' | 'cleanup') => void;
+}
+
 async function parseExcelToCsv(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -47,7 +51,7 @@ const loadingMessages = [
   "Quasi pronto, l'IA sta finalizzando l'elaborazione...",
 ];
 
-export const ImportView: React.FC = () => {
+export const ImportView: React.FC<ImportViewProps> = ({ setPage }) => {
   const [files, setFiles] = useState<File[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
@@ -197,6 +201,11 @@ export const ImportView: React.FC = () => {
     setSelectedEvents(new Set());
   };
   
+  const handleResetAndGoToDashboard = () => {
+    handleReset(true);
+    setPage('dashboard');
+  };
+
   const handleBackToPreview = () => {
     setStep('preview');
   };
@@ -282,17 +291,25 @@ export const ImportView: React.FC = () => {
               )}
             </div>
             
-            {canProcess && (
-              <div className="mt-8 text-center">
-                <button
-                  onClick={() => handleProcess()}
-                  disabled={isLoading}
-                  className="bg-primary hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed text-primary-foreground font-bold py-3 px-8 rounded-full shadow-lg shadow-primary/20 transform hover:scale-105 transition-all duration-300 ease-in-out"
-                >
-                  Elabora e Visualizza Anteprima Eventi
-                </button>
-              </div>
-            )}
+            <div className="mt-8 text-center">
+                <div className="flex justify-center items-center space-x-4">
+                     <button
+                        onClick={() => setPage('dashboard')}
+                        className="bg-secondary hover:bg-muted text-secondary-foreground font-bold py-3 px-6 rounded-full inline-flex items-center space-x-3 transition-all duration-300"
+                    >
+                       <ArrowLeftIcon className="h-5 w-5"/> <span>Indietro</span>
+                    </button>
+                    {canProcess && (
+                        <button
+                          onClick={() => handleProcess()}
+                          disabled={isLoading}
+                          className="bg-primary hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed text-primary-foreground font-bold py-3 px-8 rounded-full shadow-lg shadow-primary/20 transform hover:scale-105 transition-all duration-300 ease-in-out"
+                        >
+                          Elabora e Visualizza Anteprima Eventi
+                        </button>
+                    )}
+                </div>
+            </div>
           </>
         );
       case 'preview':
@@ -334,7 +351,7 @@ export const ImportView: React.FC = () => {
                   <span className="hidden sm:inline">Torna alla modifica</span>
               </button>
             </div>
-            <GoogleCalendarImporter events={events} onReset={() => handleReset(true)} />
+            <GoogleCalendarImporter events={events} onReset={handleResetAndGoToDashboard} />
           </div>
         );
       default:

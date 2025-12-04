@@ -8,13 +8,12 @@ import type { GCalEvent } from './googleCalendarService';
 // It will be added in App.tsx after receiving the data.
 export type ApiEventObject = Omit<EventObject, 'id'>;
 
-// FIX: Reverted to using import.meta.env.VITE_API_KEY to align with the Vite project setup.
+// FIX: Switched to process.env.API_KEY to comply with guidelines and fix TypeScript error.
 const getAiClient = () => {
-    // This project uses Vite, which exposes environment variables via import.meta.env.
-    const apiKey = import.meta.env.VITE_API_KEY;
+    const apiKey = process.env.API_KEY;
     if (!apiKey) {
-        // Updated error message to guide the user according to the README.md file.
-        throw new Error("La variabile d'ambiente VITE_API_KEY non è impostata. Assicurati che sia configurata nel tuo file .env come descritto nel README.");
+        // Updated error message to refer to the correct environment variable.
+        throw new Error("La variabile d'ambiente API_KEY non è impostata. Assicurati che sia configurata nel tuo ambiente di esecuzione.");
     }
     return new GoogleGenAI({ apiKey });
 };
@@ -109,7 +108,8 @@ export const extractEvents = async (input: File | string): Promise<ApiEventObjec
   } catch (err: any) {
       console.error("Errore API Gemini:", err);
       // Passa attraverso il messaggio di errore specifico della chiave API.
-      if (err.message?.includes('VITE_API_KEY')) {
+      // FIX: Check for API_KEY instead of VITE_API_KEY.
+      if (err.message?.includes('API_KEY')) {
           throw err;
       }
       // Controlla errori specifici come sovraccarico o indisponibilità

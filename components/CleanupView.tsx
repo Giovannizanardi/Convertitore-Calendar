@@ -16,6 +16,9 @@ interface ManualFilters {
     text: string;
     location: string;
 }
+interface EventWithCalendarId extends gcal.GCalEvent {
+    calendarId: string;
+}
 
 export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
     const [gcalState, setGCalState] = useState<GCalState>('initial');
@@ -24,7 +27,9 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
     const [calendars, setCalendars] = useState<Calendar[]>([]);
     const [selectedCalendarIds, setSelectedCalendarIds] = useState<Set<string>>(new Set());
     const [isCalendarDropdownOpen, setCalendarDropdownOpen] = useState(false);
-    const [events, setEvents] = useState<gcal.GCalEvent[]>([]);
+    const [events, setEvents] = useState<EventWithCalendarId[]>([]);
+    const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
+    const [isDeleting, setIsDeleting] = useState(false);
     const [aiQuery, setAiQuery] = useState('');
     const [manualFilters, setManualFilters] = useState<ManualFilters>({ startDate: '', endDate: '', text: '', location: '' });
     const [isSearching, setIsSearching] = useState(false);
@@ -98,85 +103,123 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
         gcal.handleAuthClick((token) => handleTokenResponse(token));
     };
 
-    const fetchEventsFromSelectedCalendars = async (timeMin: string, timeMax: string): Promise<gcal.GCalEvent[] | null> => {
+    const fetchEventsFromSelectedCalendars = async (timeMin: string, timeMax: string): Promise<EventWithCalendarId[] | null> => {
         if (selectedCalendarIds.size === 0) {
             setError({ title: 'Nessun Calendario Selezionato', message: 'Per favore, seleziona almeno un calendario.' });
             return null;
         }
         
-        const allEvents: gcal.GCalEvent[] = [];
+        const allEvents: EventWithCalendarId[] = [];
         for (const calId of selectedCalendarIds) {
-            const events = await gcal.listEvents(calId, timeMin, timeMax);
-            allEvents.push(...events);
+            const eventsFromCal = await gcal.listEvents(calId, timeMin, timeMax);
+            const eventsWithCalId = eventsFromCal.map(e => ({...e, calendarId: calId}));
+            allEvents.push(...eventsWithCalId);
         }
-        return Array.from(new Map(allEvents.map(e => [e.id, e])).values());
+        const uniqueEvents = Array.from(new Map(allEvents.map(e => [e.id, e])).values());
+        return uniqueEvents;
     };
-
-    const handleAiSearch = async () => {
-        if (!aiQuery.trim() || selectedCalendarIds.size === 0) return;
-        
+    
+    const performSearch = (searchFn: () => Promise<void>) => {
         setIsSearching(true);
         setError(null);
         setEvents([]);
+        setSelectedEventIds(new Set());
         setSearchPerformed(false);
-
-        try {
-            const now = new Date();
-            const timeMin = new Date(now.getFullYear() - 5, now.getMonth(), now.getDate()).toISOString();
-            const fetchedEvents = await fetchEventsFromSelectedCalendars(timeMin, now.toISOString());
-            
-            if (fetchedEvents) {
-                const eventIdsToDelete = await findEventsToDelete(aiQuery, fetchedEvents);
-                const foundEvents = fetchedEvents.filter(e => eventIdsToDelete.includes(e.id));
-                setEvents(foundEvents);
-            }
-        } catch (err: any) {
-            setError({ title: 'Errore durante la ricerca IA', message: err.message });
-        } finally {
+        searchFn().finally(() => {
             setIsSearching(false);
             setSearchPerformed(true);
-        }
+        });
+    }
+
+    const handleAiSearch = async () => {
+        if (!aiQuery.trim() || selectedCalendarIds.size === 0) return;
+        performSearch(async () => {
+            try {
+                const now = new Date();
+                const timeMin = new Date(now.getFullYear() - 5, now.getMonth(), now.getDate()).toISOString();
+                const fetchedEvents = await fetchEventsFromSelectedCalendars(timeMin, now.toISOString());
+                
+                if (fetchedEvents) {
+                    const eventIdsToDelete = await findEventsToDelete(aiQuery, fetchedEvents);
+                    const foundEvents = fetchedEvents.filter(e => eventIdsToDelete.includes(e.id));
+                    setEvents(foundEvents);
+                }
+            } catch (err: any) {
+                setError({ title: 'Errore durante la ricerca IA', message: err.message });
+            }
+        });
     };
     
     const handleManualSearch = async () => {
         if (selectedCalendarIds.size === 0) return;
-        setIsSearching(true);
-        setError(null);
-        setEvents([]);
-        setSearchPerformed(false);
+        performSearch(async () => {
+            try {
+                const timeMin = manualFilters.startDate 
+                    ? new Date(manualFilters.startDate).toISOString() 
+                    : new Date(new Date().setFullYear(new Date().getFullYear() - 5)).toISOString();
+                const timeMax = manualFilters.endDate 
+                    ? new Date(new Date(manualFilters.endDate).setHours(23, 59, 59, 999)).toISOString()
+                    : new Date(new Date().setFullYear(new Date().getFullYear() + 5)).toISOString();
 
-        try {
-            const timeMin = manualFilters.startDate 
-                ? new Date(manualFilters.startDate).toISOString() 
-                : new Date(new Date().setFullYear(new Date().getFullYear() - 5)).toISOString();
-            
-            const timeMax = manualFilters.endDate 
-                ? new Date(new Date(manualFilters.endDate).setHours(23, 59, 59, 999)).toISOString()
-                : new Date(new Date().setFullYear(new Date().getFullYear() + 5)).toISOString();
-
-            let fetchedEvents = await fetchEventsFromSelectedCalendars(timeMin, timeMax);
-            
-            if (fetchedEvents) {
-                const textFilter = manualFilters.text.toLowerCase();
-                const locationFilter = manualFilters.location.toLowerCase();
+                let fetchedEvents = await fetchEventsFromSelectedCalendars(timeMin, timeMax);
                 
-                const filtered = fetchedEvents.filter(event => {
-                    const textMatch = !textFilter || 
-                                      event.summary?.toLowerCase().includes(textFilter) ||
-                                      event.description?.toLowerCase().includes(textFilter);
-                    const locationMatch = !locationFilter || 
-                                          (event as any).location?.toLowerCase().includes(locationFilter);
-                    return textMatch && locationMatch;
-                });
-                setEvents(filtered);
+                if (fetchedEvents) {
+                    const textFilter = manualFilters.text.toLowerCase();
+                    const locationFilter = manualFilters.location.toLowerCase();
+                    
+                    const filtered = fetchedEvents.filter(event => {
+                        const textMatch = !textFilter || event.summary?.toLowerCase().includes(textFilter) || event.description?.toLowerCase().includes(textFilter);
+                        const locationMatch = !locationFilter || event.location?.toLowerCase().includes(locationFilter);
+                        return textMatch && locationMatch;
+                    });
+                    setEvents(filtered);
+                }
+            } catch (err: any) {
+                setError({ title: 'Errore durante la ricerca', message: err.message });
             }
-        } catch (err: any) {
-            setError({ title: 'Errore durante la ricerca', message: err.message });
-        } finally {
-            setIsSearching(false);
-            setSearchPerformed(true);
+        });
+    };
+
+    const handleSelect = (eventId: string) => {
+        setSelectedEventIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(eventId)) newSet.delete(eventId);
+            else newSet.add(eventId);
+            return newSet;
+        });
+    };
+
+    const handleSelectAll = () => {
+        if (selectedEventIds.size === events.length) {
+            setSelectedEventIds(new Set());
+        } else {
+            setSelectedEventIds(new Set(events.map(e => e.id)));
         }
     };
+    
+    const handleDeleteSelected = async () => {
+        if (selectedEventIds.size === 0 || !window.confirm(`Sei sicuro di voler eliminare ${selectedEventIds.size} eventi? Questa azione è irreversibile.`)) {
+            return;
+        }
+
+        setIsDeleting(true);
+        setError(null);
+
+        const eventsToDelete = events.filter(e => selectedEventIds.has(e.id));
+        const promises = eventsToDelete.map(e => gcal.deleteEvent(e.calendarId, e.id));
+        const results = await Promise.allSettled(promises);
+
+        const failedDeletions = results.filter(r => r.status === 'rejected');
+        if (failedDeletions.length > 0) {
+            console.error("Failed deletions:", failedDeletions);
+            setError({ title: 'Eliminazione Parziale', message: `${failedDeletions.length} eventi non sono stati eliminati. Controlla la console.` });
+        }
+
+        setEvents(prev => prev.filter(e => !selectedEventIds.has(e.id)));
+        setSelectedEventIds(new Set());
+        setIsDeleting(false);
+    };
+
 
     if (gcalState === 'initial' || gcalState === 'authenticating') {
         return (
@@ -315,25 +358,58 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
 
                 {events.length > 0 && !isSearching && (
                     <div className="animate-fade-in">
-                        <h3 className="text-xl font-semibold mb-4 text-center">Risultati della Ricerca ({events.length})</h3>
-                        <div className="bg-card border border-border rounded-lg p-4 space-y-3 max-h-96 overflow-y-auto">
-                            {events.map(event => (
-                                <div key={event.id} className="bg-secondary p-3 rounded-md flex justify-between items-center">
-                                    <div>
-                                        <p className="font-semibold text-secondary-foreground">{event.summary}</p>
-                                        <p className="text-sm text-muted-foreground">
-                                            {new Date(event.start.dateTime || event.start.date || '').toLocaleString()}
-                                        </p>
-                                    </div>
-                                    <a href={event.htmlLink} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline">Vedi</a>
-                                </div>
-                            ))}
-                        </div>
-                         <div className="text-center mt-6">
-                             <button disabled className="bg-destructive hover:bg-destructive/90 disabled:bg-muted text-destructive-foreground font-bold py-3 px-8 rounded-full inline-flex items-center space-x-3 transition-all duration-300">
-                                <Trash2Icon className="h-5 w-5" />
-                                <span>Elimina Selezionati (Prossimamente)</span>
+                        <div className="flex justify-between items-center mb-4">
+                            <p className="text-sm text-muted-foreground">
+                                Trovati {events.length} eventi. {selectedEventIds.size} selezionati.
+                            </p>
+                            <button 
+                                onClick={handleDeleteSelected}
+                                disabled={selectedEventIds.size === 0 || isDeleting}
+                                className="bg-destructive hover:bg-destructive/90 disabled:bg-muted text-destructive-foreground font-bold py-2 px-4 rounded-lg inline-flex items-center space-x-2 transition-colors"
+                            >
+                                {isDeleting ? <Loader className="h-5 w-5" /> : <Trash2Icon className="h-5 w-5" />}
+                                <span>Elimina {selectedEventIds.size} Eventi</span>
                             </button>
+                        </div>
+                        
+                        <div className="bg-card border border-border rounded-lg overflow-hidden">
+                            <div className="grid grid-cols-[auto,1fr,auto,auto] sm:grid-cols-[auto,2fr,1fr,1fr] gap-4 px-4 py-2 bg-secondary text-xs font-medium text-muted-foreground uppercase items-center">
+                                <input 
+                                    type="checkbox"
+                                    checked={events.length > 0 && selectedEventIds.size === events.length}
+                                    onChange={handleSelectAll}
+                                    className="w-4 h-4 text-primary bg-secondary border-border rounded focus:ring-ring"
+                                    aria-label="Seleziona tutti gli eventi"
+                                />
+                                <div>Riepilogo Evento</div>
+                                <div className="hidden sm:block">Ora di Inizio</div>
+                                <div className="hidden sm:block">Luogo</div>
+                            </div>
+
+                            <div className="max-h-[60vh] overflow-y-auto">
+                                {events.map(event => (
+                                    <div key={event.id} className="grid grid-cols-[auto,1fr,auto,auto] sm:grid-cols-[auto,2fr,1fr,1fr] gap-4 px-4 py-3 border-t border-border items-center hover:bg-accent transition-colors text-sm">
+                                        <input 
+                                            type="checkbox"
+                                            checked={selectedEventIds.has(event.id)}
+                                            onChange={() => handleSelect(event.id)}
+                                            className="w-4 h-4 text-primary bg-secondary border-border rounded focus:ring-ring"
+                                            aria-label={`Seleziona evento ${event.summary}`}
+                                        />
+                                        <div>
+                                            <p className="font-semibold text-foreground truncate" title={event.summary}>{event.summary}</p>
+                                            <div className="sm:hidden text-xs text-muted-foreground mt-1">
+                                                {new Date(event.start.dateTime || event.start.date || '').toLocaleString('it-IT', {day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'})}
+                                                {' - '}{event.location || 'N/D'}
+                                            </div>
+                                        </div>
+                                        <div className="hidden sm:block text-muted-foreground">
+                                            {new Date(event.start.dateTime || event.start.date || '').toLocaleString('it-IT', {day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'})}
+                                        </div>
+                                        <div className="hidden sm:block text-muted-foreground truncate" title={event.location || 'N/D'}>{event.location || 'N/D'}</div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 )}
