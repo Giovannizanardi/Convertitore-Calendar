@@ -373,7 +373,7 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
                         </div>
                         
                         <div className="bg-card border border-border rounded-lg overflow-hidden">
-                            <div className="grid grid-cols-[auto,1fr,auto,auto] sm:grid-cols-[auto,2fr,1fr,1fr] gap-4 px-4 py-2 bg-secondary text-xs font-medium text-muted-foreground uppercase items-center">
+                            <div className="grid grid-cols-[auto,2fr,1fr,1fr] gap-4 px-4 py-2 bg-secondary text-xs font-medium text-muted-foreground uppercase items-center">
                                 <input 
                                     type="checkbox"
                                     checked={events.length > 0 && selectedEventIds.size === events.length}
@@ -382,13 +382,13 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
                                     aria-label="Seleziona tutti gli eventi"
                                 />
                                 <div>Riepilogo Evento</div>
-                                <div className="hidden sm:block">Ora di Inizio</div>
-                                <div className="hidden sm:block">Luogo</div>
+                                <div>Ora di Inizio</div>
+                                <div>Luogo</div>
                             </div>
 
                             <div className="max-h-[60vh] overflow-y-auto">
                                 {events.map(event => (
-                                    <div key={event.id} className="grid grid-cols-[auto,1fr,auto,auto] sm:grid-cols-[auto,2fr,1fr,1fr] gap-4 px-4 py-3 border-t border-border items-center hover:bg-accent transition-colors text-sm">
+                                    <div key={event.id} className="grid grid-cols-[auto,2fr,1fr,1fr] gap-4 px-4 py-3 border-t border-border items-center hover:bg-accent transition-colors text-sm">
                                         <input 
                                             type="checkbox"
                                             checked={selectedEventIds.has(event.id)}
@@ -396,17 +396,11 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
                                             className="w-4 h-4 text-primary bg-secondary border-border rounded focus:ring-ring"
                                             aria-label={`Seleziona evento ${event.summary}`}
                                         />
-                                        <div>
-                                            <p className="font-semibold text-foreground truncate" title={event.summary}>{event.summary}</p>
-                                            <div className="sm:hidden text-xs text-muted-foreground mt-1">
-                                                {new Date(event.start.dateTime || event.start.date || '').toLocaleString('it-IT', {day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'})}
-                                                {' - '}{event.location || 'N/D'}
-                                            </div>
-                                        </div>
-                                        <div className="hidden sm:block text-muted-foreground">
+                                        <p className="font-semibold text-foreground truncate" title={event.summary}>{event.summary}</p>
+                                        <div className="text-muted-foreground">
                                             {new Date(event.start.dateTime || event.start.date || '').toLocaleString('it-IT', {day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'})}
                                         </div>
-                                        <div className="hidden sm:block text-muted-foreground truncate" title={event.location || 'N/D'}>{event.location || 'N/D'}</div>
+                                        <div className="text-muted-foreground truncate" title={event.location || 'N/D'}>{event.location || 'N/D'}</div>
                                     </div>
                                 ))}
                             </div>
