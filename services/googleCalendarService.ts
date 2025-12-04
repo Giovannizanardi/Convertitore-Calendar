@@ -13,13 +13,24 @@ const GOOGLE_CLIENT_ID: string = '707970408103-3aptetq009ef5b99oh8git8ldjta0355.
 // disabilitata solo se l'ID non è stato configurato.
 export const isGoogleClientConfigured = GOOGLE_CLIENT_ID !== 'IL_TUO_CLIENT_ID_QUI';
 
-const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/userinfo.email';
+const SCOPES = 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email';
 
 declare var window: any;
 
 let tokenClient: any;
 let gapiInited = false;
 let gisInited = false;
+
+// Tipi per gli eventi di Google Calendar
+export interface GCalEvent {
+    id: string;
+    summary: string;
+    description?: string;
+    start: { dateTime?: string; date?: string; };
+    end: { dateTime?: string; date?:string; };
+    attendees?: { email: string }[];
+    htmlLink: string;
+}
 
 // Helper per attendere la disponibilità di un oggetto globale
 const waitForGlobal = <T>(name: string, timeout = 5000): Promise<T> => {
@@ -170,6 +181,42 @@ export const insertEvent = async (calendarId: string, event: ValidatedEvent) => 
         console.error('Errore API di Google Calendar durante l\'inserimento dell\'evento:', error);
         // Estrae il messaggio di errore più specifico dall'oggetto di errore dell'API
         const errorMessage = error.result?.error?.message || error.message || 'Errore sconosciuto durante l\'inserimento.';
+        throw new Error(errorMessage);
+    }
+};
+
+// List events from a calendar within a date range
+export const listEvents = async (calendarId: string, timeMin: string, timeMax: string): Promise<GCalEvent[]> => {
+    try {
+        const response = await window.gapi.client.calendar.events.list({
+            'calendarId': calendarId,
+            'timeMin': timeMin, // RFC3339 timestamp, e.g., '2023-01-01T00:00:00Z'
+            'timeMax': timeMax, // RFC3339 timestamp
+            'showDeleted': false,
+            'singleEvents': true,
+            'maxResults': 2500, // Max results per page
+            'orderBy': 'startTime'
+        });
+        return response.result.items;
+    } catch (error: any) {
+        console.error('Errore API di Google Calendar durante il recupero degli eventi:', error);
+        const errorMessage = error.result?.error?.message || error.message || 'Errore sconosciuto durante il recupero.';
+        throw new Error(errorMessage);
+    }
+};
+
+// Delete an event
+export const deleteEvent = async (calendarId: string, eventId: string) => {
+    try {
+        const response = await window.gapi.client.calendar.events.delete({
+            'calendarId': calendarId,
+            'eventId': eventId
+        });
+        // A successful deletion returns an empty response (status 204)
+        return response;
+    } catch (error: any) {
+        console.error('Errore API di Google Calendar durante l\'eliminazione dell\'evento:', error);
+        const errorMessage = error.result?.error?.message || error.message || 'Errore sconosciuto durante l\'eliminazione.';
         throw new Error(errorMessage);
     }
 };

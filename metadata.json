@@ -1,5 +1,5 @@
 {
-  "name": "ForMa - Convertitore di Eventi per Google Calendar",
-  "description": "Un'applicazione intelligente per estrarre eventi da file (Word, Excel, testo) o testo incollato, rivederli e importarli facilmente in Google Calendar o esportarli in formato CSV. Realizzata con l'IA di Gemini su idea di Giovanni Zanardi.",
+  "name": "ForMa - Calendar Suite",
+  "description": "Una suite intelligente basata su IA per popolare e pulire i tuoi calendari. Importa eventi in blocco da file e testo, o trova e rimuovi rapidamente eventi superflui con il nostro assistente.",
   "requestFramePermissions": []
 }

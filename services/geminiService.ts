@@ -1,18 +1,20 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { EventObject } from '../lib/types';
 import type { Part } from "@google/genai";
+import type { GCalEvent } from './googleCalendarService';
 
 
 // The service will return a raw object without the `id` field.
 // It will be added in App.tsx after receiving the data.
 export type ApiEventObject = Omit<EventObject, 'id'>;
 
-// FIX: Correctly access the Vite environment variable as defined in the project's README.
-// This resolves the TypeScript error 'Cannot find name 'process''.
+// FIX: Use process.env.API_KEY to align with the coding guidelines.
 const getAiClient = () => {
-    const apiKey = import.meta.env.VITE_API_KEY;
+    // FIX: Switched from import.meta.env.VITE_API_KEY to process.env.API_KEY to adhere to the coding guidelines.
+    const apiKey = process.env.API_KEY;
     if (!apiKey) {
-        throw new Error("La variabile d'ambiente VITE_API_KEY non è impostata. Assicurati che sia configurata nel tuo file .env come descritto nel README.");
+        // FIX: Updated error message to reflect the change to process.env.API_KEY.
+        throw new Error("La variabile d'ambiente API_KEY non è impostata. Assicurati che sia configurata nell'ambiente di esecuzione.");
     }
     return new GoogleGenAI({ apiKey });
 };
@@ -107,7 +109,8 @@ export const extractEvents = async (input: File | string): Promise<ApiEventObjec
   } catch (err: any) {
       console.error("Errore API Gemini:", err);
       // Passa attraverso il messaggio di errore specifico della chiave API.
-      if (err.message?.includes('VITE_API_KEY')) {
+      // FIX: Updated the error message check to look for API_KEY instead of VITE_API_KEY.
+      if (err.message?.includes('API_KEY non è impostata')) {
           throw err;
       }
       // Controlla errori specifici come sovraccarico o indisponibilità
@@ -166,5 +169,52 @@ Il valore non valido corrente è: "${event[fieldToCorrect]}".
   } catch (e) {
     console.error("Impossibile ottenere il suggerimento di correzione dall'IA:", e);
     return null;
+  }
+};
+
+export const findEventsToDelete = async (query: string, events: GCalEvent[]): Promise<string[]> => {
+  if (!query) throw new Error("La query di ricerca non può essere vuota.");
+  if (events.length === 0) return [];
+
+  const ai = getAiClient();
+  const systemInstruction = `
+Sei un assistente intelligente per la pulizia di calendari. Il tuo compito è analizzare una query dell'utente e un elenco di eventi di Google Calendar (in formato JSON) e restituire gli ID degli eventi che corrispondono alla query.
+
+Regole:
+1. La tua risposta DEVE essere un array JSON valido contenente solo le stringhe degli ID degli eventi corrispondenti.
+2. Interpreta il linguaggio naturale. Ad esempio, "riunioni vecchie" potrebbe significare eventi passati da molto tempo, "eventi vuoti" potrebbe indicare eventi senza altri partecipanti o descrizione.
+3. Se la query è "tutti gli eventi con 'budget' nel titolo", restituisci gli ID di tutti gli eventi il cui 'summary' contiene la parola 'budget'.
+4. Se nessun evento corrisponde, restituisci un array vuoto [].
+5. Non includere altro testo, spiegazioni o markdown nella risposta. Solo l'array JSON di stringhe di ID.
+`;
+
+  const userPrompt = `
+Query utente: "${query}"
+
+Elenco eventi (considera solo i campi forniti):
+${JSON.stringify(events.map(e => ({id: e.id, summary: e.summary, description: e.description, start: e.start, end: e.end, attendees: e.attendees})), null, 2)}
+`;
+
+  const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: userPrompt,
+      config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+          responseSchema: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+          }
+      }
+  });
+
+  try {
+      const jsonText = (response.text ?? '').trim();
+      if (!jsonText) return [];
+      const parsedIds: string[] = JSON.parse(jsonText);
+      return parsedIds;
+  } catch (e) {
+      console.error("Impossibile analizzare la risposta JSON degli ID evento dall'IA:", response.text);
+      throw new Error("Il modello IA ha restituito una struttura dati non valida per gli ID evento.");
   }
 };

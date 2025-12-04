@@ -1,10 +1,10 @@
 import React from 'react';
-import { RefreshCwIcon, PaletteIcon } from './Icons';
+import { HomeIcon, PaletteIcon } from './Icons';
 import { ThemeSwitcher } from './ThemeSwitcher';
 
 interface HeaderProps {
-    onReset: () => void;
-    hasContent: boolean;
+    onGoHome: () => void;
+    showHomeButton: boolean;
     description: string;
     appName: string;
     onCustomizeTheme: () => void;
@@ -13,7 +13,7 @@ interface HeaderProps {
 const logoSvgUri = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='48' viewBox='0 0 160 48'%3E%3Cstyle%3E.forma-text { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 36px; fill: %23EF4444; letter-spacing: -1px; } .m-highlight { fill: %23DC2626; }%3C/style%3E%3Ctext x='0' y='35' class='forma-text'%3EFor%3Ctspan class='m-highlight'%3EM%3C/tspan%3Ea%3C/text%3E%3C/svg%3E";
 
 
-export const Header: React.FC<HeaderProps> = ({ onReset, hasContent, description, appName, onCustomizeTheme }) => {
+export const Header: React.FC<HeaderProps> = ({ onGoHome, showHomeButton, description, appName, onCustomizeTheme }) => {
     const subtitle = appName.replace(/ForMa\s*-\s*/i, '');
     
     return (
@@ -28,14 +28,14 @@ export const Header: React.FC<HeaderProps> = ({ onReset, hasContent, description
                      )}
                 </div>
                 <div className="flex items-center space-x-2 sm:space-x-4">
-                    {hasContent && (
+                    {showHomeButton && (
                         <button
-                            onClick={onReset}
+                            onClick={onGoHome}
                             className="flex items-center space-x-2 text-muted-foreground hover:text-foreground transition-colors duration-200 bg-secondary hover:bg-accent px-3 py-2 rounded-md"
-                            title="Ricomincia"
+                            title="Torna alla Dashboard"
                         >
-                            <RefreshCwIcon className="h-4 w-4" />
-                            <span className="hidden sm:inline text-sm">Ricomincia</span>
+                            <HomeIcon className="h-4 w-4" />
+                            <span className="hidden sm:inline text-sm">Dashboard</span>
                         </button>
                     )}
                     <ThemeSwitcher />
