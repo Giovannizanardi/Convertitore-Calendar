@@ -22,7 +22,7 @@ export default function App() {
       case 'import':
         return <ImportView />;
       case 'cleanup':
-        return <CleanupView />;
+        return <CleanupView setPage={setPage} />;
       case 'dashboard':
       default:
         return <Dashboard setPage={setPage} />;
