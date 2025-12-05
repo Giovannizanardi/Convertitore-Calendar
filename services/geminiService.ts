@@ -16,7 +16,7 @@ export interface FilterParams {
 const getAiClient = () => {
     // Use process.env.API_KEY as per @google/genai guidelines.
     // Ensure API_KEY is set in your environment variables.
-    const apiKey = process.env.API_KEY;
+    const apiKey = import.meta.env.API_KEY;
     
     if (!apiKey) {
         throw new Error("Chiave API non trovata. Assicurati che API_KEY sia impostata nelle variabili d'ambiente.");
