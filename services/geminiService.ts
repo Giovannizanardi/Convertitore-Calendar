@@ -8,6 +8,13 @@ import type { GCalEvent } from './googleCalendarService';
 // It will be added in App.tsx after receiving the data.
 export type ApiEventObject = Omit<EventObject, 'id'>;
 
+export interface FilterParams {
+    startDate: string;
+    endDate: string;
+    text: string;
+    location: string;
+}
+
 const getAiClient = () => {
     // Use process.env.API_KEY as per @google/genai guidelines.
     // Ensure API_KEY is set in your environment variables.
@@ -172,9 +179,8 @@ Il valore non valido corrente è: "${event[fieldToCorrect]}".
   }
 };
 
-export const findEventsToDelete = async (query: string, events: GCalEvent[]): Promise<string[]> => {
-  if (!query) throw new Error("La query di ricerca non può essere vuota.");
-  if (events.length === 0) return [];
+export const parseFilterFromQuery = async (query: string): Promise<FilterParams> => {
+  if (!query) throw new Error("La query non può essere vuota.");
 
   const ai = getAiClient();
   
@@ -188,51 +194,25 @@ export const findEventsToDelete = async (query: string, events: GCalEvent[]): Pr
   });
 
   const systemInstruction = `
-Sei un assistente di ricerca intelligente per calendario.
-Il tuo obiettivo è trovare gli ID degli eventi che corrispondono alla richiesta dell'utente.
+Sei un assistente intelligente che aiuta a compilare filtri di ricerca per calendari.
+Il tuo compito è tradurre la richiesta dell'utente in parametri precisi per i campi di ricerca.
 
-Regole Fondamentali:
-1.  Analizza la richiesta dell'utente per identificare:
-    - PAROLE CHIAVE DI RICERCA (es. "Colloqui", "Riunione") da cercare in 'summary' o 'description'.
-    - RIFERIMENTI TEMPORALI (es. "dicembre", "settimana prossima", "domani", "2024").
-2.  Se c'è un RIFERIMENTO TEMPORALE, usalo per filtrare gli eventi basandoti sulla DATA DI OGGI fornita.
-    - "dicembre" = cerca eventi nel mese di dicembre dell'anno corrente (o prossimo se siamo alla fine dell'anno).
-    - "settimana prossima" = calcola i giorni corretti basandoti sulla data odierna.
-3.  Se c'è una PAROLA CHIAVE, cerca corrispondenze parziali (case-insensitive).
-4.  Restituisci ESCLUSIVAMENTE un array JSON di stringhe (ID degli eventi). Nessun altro testo.
+Campi da compilare:
+1. startDate (YYYY-MM-DD): Data inizio del periodo.
+2. endDate (YYYY-MM-DD): Data fine del periodo.
+3. text: Parole chiave da cercare nell'oggetto o descrizione.
+4. location: Parole chiave per il luogo.
+
+Regole:
+- OGGI è: ${todayDate} (${todayDesc}). Usa questa data per calcolare riferimenti come "settimana prossima", "ieri", "dicembre" (se siamo a novembre, intende dicembre di quest'anno; se siamo a gennaio, dicembre scorso o prossimo in base al contesto, di default usa il futuro prossimo se ambiguo).
+- Se l'utente specifica un periodo (es. "Dicembre"), compila startDate con il primo giorno e endDate con l'ultimo.
+- Se l'utente non specifica date, lascia startDate e endDate vuote ("").
+- Se l'utente specifica un argomento (es. "Colloqui"), mettilo in "text".
+- Se l'utente specifica un luogo (es. "in ufficio", "sala riunioni"), mettilo in "location".
+- Rimuovi le parole temporali dal campo "text" (es. se cerca "colloqui domani", "text" deve essere solo "colloqui").
 `;
 
-  // Pre-process events to make dates very easy for the LLM to understand without math
-  // We convert "2025-12-09T14:30:00+01:00" to "2025-12-09 (martedì)"
-  const simplifiedEvents = events.map(e => {
-      const startIso = e.start.dateTime || e.start.date || '';
-      let dateHuman = "N/A";
-      if (startIso) {
-          try {
-             const d = new Date(startIso);
-             const yyyymmdd = d.toISOString().split('T')[0];
-             const dayName = d.toLocaleDateString('it-IT', { weekday: 'long' });
-             dateHuman = `${yyyymmdd} (${dayName})`;
-          } catch(e) {
-             dateHuman = startIso;
-          }
-      }
-      return {
-          id: e.id,
-          summary: e.summary,
-          description: e.description,
-          date: dateHuman, // Field specifico per aiutare la ricerca temporale
-          rawStart: startIso // Manteniamo anche il dato grezzo
-      };
-  });
-
-  const userPrompt = `
-DATA DI OGGI: ${todayDate} (${todayDesc})
-RICHIESTA UTENTE: "${query}"
-
-LISTA EVENTI:
-${JSON.stringify(simplifiedEvents, null, 2)}
-`;
+  const userPrompt = `Query utente: "${query}"`;
 
   const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
@@ -241,19 +221,24 @@ ${JSON.stringify(simplifiedEvents, null, 2)}
           systemInstruction,
           responseMimeType: "application/json",
           responseSchema: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING }
+              type: Type.OBJECT,
+              properties: {
+                  startDate: { type: Type.STRING },
+                  endDate: { type: Type.STRING },
+                  text: { type: Type.STRING },
+                  location: { type: Type.STRING }
+              },
+              required: ['startDate', 'endDate', 'text', 'location']
           }
       }
   });
 
   try {
       const jsonText = (response.text ?? '').trim();
-      if (!jsonText) return [];
-      const parsedIds: string[] = JSON.parse(jsonText);
-      return parsedIds;
+      if (!jsonText) throw new Error("Risposta vuota");
+      return JSON.parse(jsonText) as FilterParams;
   } catch (e) {
-      console.error("Impossibile analizzare la risposta JSON degli ID evento dall'IA:", response.text);
-      throw new Error("Il modello IA ha restituito una struttura dati non valida per gli ID evento.");
+      console.error("Errore parsing AI:", response.text);
+      throw new Error("Impossibile interpretare la richiesta.");
   }
 };
