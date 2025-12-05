@@ -10,12 +10,6 @@ interface Calendar { id: string; summary: string; primary?: boolean; }
 interface CleanupViewProps {
     setPage: (page: 'dashboard' | 'import' | 'cleanup') => void;
 }
-interface ManualFilters {
-    startDate: string;
-    endDate: string;
-    text: string;
-    location: string;
-}
 interface EventWithCalendarId extends gcal.GCalEvent {
     calendarId: string;
 }
@@ -31,7 +25,7 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
     const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
     const [isDeleting, setIsDeleting] = useState(false);
     const [aiQuery, setAiQuery] = useState('');
-    const [manualFilters, setManualFilters] = useState<ManualFilters>({ startDate: '', endDate: '', text: '', location: '' });
+    const [manualFilters, setManualFilters] = useState<FilterParams>({ startDate: '', endDate: '', text: '', location: '' });
     const [isSearching, setIsSearching] = useState(false);
     const [searchPerformed, setSearchPerformed] = useState(false);
     
@@ -121,7 +115,7 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
     };
     
     // Core search logic that takes specific filters as arguments
-    const executeSearch = async (filters: ManualFilters) => {
+    const executeSearch = async (filters: FilterParams) => {
         if (selectedCalendarIds.size === 0) return;
         
         setIsSearching(true);
@@ -131,14 +125,17 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
         setSearchPerformed(false);
         
         try {
-            // Default to +/- 5 years if dates are not provided
+            // Helper to get local date ISO string properly
+            // We append T00:00:00 for start and T23:59:59 for end to ensure we cover the whole local day
+            // and then convert to ISO (which will be UTC).
+            // Example: "2024-12-09" -> "2024-12-09T00:00:00" Local -> ISO UTC
+            
             const timeMin = filters.startDate 
-                ? new Date(filters.startDate).toISOString() 
+                ? new Date(`${filters.startDate}T00:00:00`).toISOString() 
                 : new Date(new Date().setFullYear(new Date().getFullYear() - 5)).toISOString();
             
-            // If endDate is provided, set time to end of that day. Otherwise default 5 years future.
             const timeMax = filters.endDate 
-                ? new Date(new Date(filters.endDate).setHours(23, 59, 59, 999)).toISOString()
+                ? new Date(`${filters.endDate}T23:59:59.999`).toISOString()
                 : new Date(new Date().setFullYear(new Date().getFullYear() + 5)).toISOString();
 
             let fetchedEvents = await fetchEventsFromSelectedCalendars(timeMin, timeMax);
@@ -169,7 +166,7 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
         setIsSearching(true); // Show loading state while AI thinks
         try {
             const result = await parseFilterFromQuery(aiQuery);
-            // Update UI
+            // Update UI with the AI interpreted filters
             setManualFilters(result);
             // Execute search immediately with these results
             await executeSearch(result);

@@ -1,8 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { EventObject } from '../lib/types';
 import type { Part } from "@google/genai";
-import type { GCalEvent } from './googleCalendarService';
-
 
 // The service will return a raw object without the `id` field.
 // It will be added in App.tsx after receiving the data.
@@ -18,7 +16,7 @@ export interface FilterParams {
 const getAiClient = () => {
     // Use process.env.API_KEY as per @google/genai guidelines.
     // Ensure API_KEY is set in your environment variables.
-    const apiKey = import.meta.env.API_KEY;
+    const apiKey = process.env.API_KEY;
     
     if (!apiKey) {
         throw new Error("Chiave API non trovata. Assicurati che API_KEY sia impostata nelle variabili d'ambiente.");
