@@ -14,12 +14,11 @@ export interface FilterParams {
 }
 
 const getAiClient = () => {
-    // Use process.env.API_KEY as per @google/genai guidelines.
-    // Ensure API_KEY is set in your environment variables.
-    const apiKey = import.meta.env.API_KEY;
+    // Utilizziamo import.meta.env.VITE_API_KEY come standard per Vite.
+    const apiKey = import.meta.env.VITE_API_KEY;
     
     if (!apiKey) {
-        throw new Error("Chiave API non trovata. Assicurati che API_KEY sia impostata nelle variabili d'ambiente.");
+        throw new Error("Chiave API non trovata. Assicurati che VITE_API_KEY sia impostata nelle variabili d'ambiente (.env).");
     }
 
     return new GoogleGenAI({ apiKey });
@@ -74,6 +73,11 @@ const fileToGenerativePart = async (file: File): Promise<Part> => {
     };
   };
 
+const cleanJson = (text: string): string => {
+    // Rimuove i backtick del markdown e il prefisso json se presente
+    return text.replace(/```json/g, '').replace(/```/g, '').trim();
+};
+
 export const extractEvents = async (input: File | string): Promise<ApiEventObject[]> => {
   if (!input) {
     throw new Error("L'input non può essere vuoto.");
@@ -102,7 +106,7 @@ export const extractEvents = async (input: File | string): Promise<ApiEventObjec
     });
     
     try {
-      const jsonText = (response.text ?? '').trim();
+      const jsonText = cleanJson(response.text ?? '');
       if (!jsonText) {
         return [];
       }
@@ -164,7 +168,7 @@ Il valore non valido corrente è: "${event[fieldToCorrect]}".
       }
     });
 
-    const jsonText = (response.text ?? '').trim();
+    const jsonText = cleanJson(response.text ?? '');
     if (!jsonText) {
       return null;
     }
@@ -232,7 +236,7 @@ Regole:
   });
 
   try {
-      const jsonText = (response.text ?? '').trim();
+      const jsonText = cleanJson(response.text ?? '');
       if (!jsonText) throw new Error("Risposta vuota");
       return JSON.parse(jsonText) as FilterParams;
   } catch (e) {

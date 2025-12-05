@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as gcal from '../services/googleCalendarService';
 import { Loader } from './Loader';
-import { GoogleIcon, SearchIcon, Trash2Icon, SparklesIcon, CalendarIcon, ChevronsUpDownIcon, ArrowLeftIcon } from './Icons';
+import { GoogleIcon, SearchIcon, Trash2Icon, SparklesIcon, CalendarIcon, ChevronsUpDownIcon, ArrowLeftIcon, XIcon } from './Icons';
 import { parseFilterFromQuery, FilterParams } from '../services/geminiService';
 
 type GCalState = 'initial' | 'authenticating' | 'authenticated' | 'loading' | 'error';
@@ -171,7 +171,8 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
             // Execute search immediately with these results
             await executeSearch(result);
         } catch (err: any) {
-            setError({ title: "Errore Interpretazione IA", message: err.message });
+            console.error("AI Error:", err);
+            setError({ title: "Errore Interpretazione IA", message: err.message || "Si è verificato un errore." });
             setIsSearching(false);
         }
     };
@@ -284,6 +285,20 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
             <div className="text-center">
                  <p className="text-muted-foreground">Accesso effettuato come <span className="font-semibold text-foreground">{user?.email}</span></p>
             </div>
+            
+            {/* Inline Error Display */}
+            {error && gcalState !== 'error' && (
+                <div className="max-w-4xl mx-auto bg-destructive/10 border border-destructive/30 text-destructive-foreground px-4 py-3 rounded-lg relative flex justify-between items-start" role="alert">
+                    <div>
+                        <strong className="font-bold">{error.title}: </strong>
+                        <span className="block sm:inline">{error.message}</span>
+                    </div>
+                    <button onClick={() => setError(null)} className="ml-4 p-1 rounded hover:bg-destructive/20 transition-colors">
+                        <XIcon className="h-5 w-5" />
+                    </button>
+                </div>
+            )}
+
             {/* Calendar Selector */}
             <div className="max-w-4xl mx-auto" ref={calendarDropdownRef}>
                 <label className="block mb-2 text-sm font-medium text-muted-foreground">Seleziona Calendari</label>
