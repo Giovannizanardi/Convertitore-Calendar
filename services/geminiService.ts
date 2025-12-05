@@ -172,22 +172,44 @@ export const findEventsToDelete = async (query: string, events: GCalEvent[]): Pr
   if (events.length === 0) return [];
 
   const ai = getAiClient();
+  
+  // FIX: È fondamentale passare la data odierna.
+  // Senza "Oggi è...", il modello non può risolvere riferimenti relativi come "settimana prossima" o "domani".
+  const today = new Date().toLocaleDateString('it-IT', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+
   const systemInstruction = `
 Sei un assistente intelligente per la pulizia di calendari. Il tuo compito è analizzare una query dell'utente e un elenco di eventi di Google Calendar (in formato JSON) e restituire gli ID degli eventi che corrispondono alla query.
 
 Regole:
 1. La tua risposta DEVE essere un array JSON valido contenente solo le stringhe degli ID degli eventi corrispondenti.
-2. Interpreta il linguaggio naturale. Ad esempio, "riunioni vecchie" potrebbe significare eventi passati da molto tempo, "eventi vuoti" potrebbe indicare eventi senza altri partecipanti o descrizione.
-3. Se la query è "tutti gli eventi con 'budget' nel titolo", restituisci gli ID di tutti gli eventi il cui 'summary' contiene la parola 'budget'.
+2. Interpreta il linguaggio naturale basandoti sulla DATA DI OGGI fornita nel prompt. 
+   - Esempio: Se oggi è Lunedì e la query è "settimana prossima", cerca eventi da Lunedì prossimo in poi.
+   - "Eventi passati" significa rigorosamente eventi con data precedente a oggi.
+   - "Eventi futuri" significa eventi da oggi in poi.
+3. Se la query è specifica (es. "budget"), cerca corrispondenze parziali nel titolo (summary) o descrizione.
 4. Se nessun evento corrisponde, restituisci un array vuoto [].
 5. Non includere altro testo, spiegazioni o markdown nella risposta. Solo l'array JSON di stringhe di ID.
 `;
 
   const userPrompt = `
+DATA DI OGGI: ${today}
 Query utente: "${query}"
 
 Elenco eventi (considera solo i campi forniti):
-${JSON.stringify(events.map(e => ({id: e.id, summary: e.summary, description: e.description, start: e.start, end: e.end, attendees: e.attendees})), null, 2)}
+${JSON.stringify(events.map(e => ({
+    id: e.id, 
+    summary: e.summary, 
+    description: e.description, 
+    // Includiamo start/end formattati per aiutare il modello a capire le date
+    start: e.start.dateTime || e.start.date, 
+    end: e.end.dateTime || e.end.date, 
+    attendees: e.attendees
+})), null, 2)}
 `;
 
   const response = await ai.models.generateContent({
