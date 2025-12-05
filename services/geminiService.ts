@@ -9,12 +9,12 @@ import type { GCalEvent } from './googleCalendarService';
 export type ApiEventObject = Omit<EventObject, 'id'>;
 
 const getAiClient = () => {
-    // Utilizza process.env.API_KEY come richiesto dalle linee guida.
-    // Si assume che process.env.API_KEY sia configurato e accessibile nell'ambiente di esecuzione.
+    // Use process.env.API_KEY as per @google/genai guidelines.
+    // Ensure API_KEY is set in your environment variables.
     const apiKey = import.meta.env.API_KEY;
     
     if (!apiKey) {
-        throw new Error("Chiave API non trovata. Assicurati che process.env.API_KEY sia impostata.");
+        throw new Error("Chiave API non trovata. Assicurati che API_KEY sia impostata nelle variabili d'ambiente.");
     }
 
     return new GoogleGenAI({ apiKey });
@@ -178,8 +178,9 @@ export const findEventsToDelete = async (query: string, events: GCalEvent[]): Pr
 
   const ai = getAiClient();
   
-  // Passiamo la data odierna per risolvere riferimenti temporali relativi
-  const today = new Date().toLocaleDateString('it-IT', { 
+  const now = new Date();
+  const todayDate = now.toISOString().split('T')[0];
+  const todayDesc = now.toLocaleDateString('it-IT', { 
     weekday: 'long', 
     year: 'numeric', 
     month: 'long', 
@@ -187,33 +188,50 @@ export const findEventsToDelete = async (query: string, events: GCalEvent[]): Pr
   });
 
   const systemInstruction = `
-Sei un assistente intelligente per la pulizia di calendari. Il tuo compito è analizzare una query dell'utente e un elenco di eventi di Google Calendar (in formato JSON) e restituire gli ID degli eventi che corrispondono alla query.
+Sei un assistente di ricerca intelligente per calendario.
+Il tuo obiettivo è trovare gli ID degli eventi che corrispondono alla richiesta dell'utente.
 
-Regole:
-1. La tua risposta DEVE essere un array JSON valido contenente solo le stringhe degli ID degli eventi corrispondenti.
-2. Interpreta il linguaggio naturale basandoti sulla DATA DI OGGI fornita nel prompt. 
-   - Esempio: Se oggi è Lunedì e la query è "settimana prossima", cerca eventi da Lunedì prossimo in poi.
-   - "Eventi passati" significa rigorosamente eventi con data precedente a oggi.
-   - "Eventi futuri" significa eventi da oggi in poi.
-3. Se la query è specifica (es. "budget"), cerca corrispondenze parziali nel titolo (summary) o descrizione.
-4. Se nessun evento corrisponde, restituisci un array vuoto [].
-5. Non includere altro testo, spiegazioni o markdown nella risposta. Solo l'array JSON di stringhe di ID.
+Regole Fondamentali:
+1.  Analizza la richiesta dell'utente per identificare:
+    - PAROLE CHIAVE DI RICERCA (es. "Colloqui", "Riunione") da cercare in 'summary' o 'description'.
+    - RIFERIMENTI TEMPORALI (es. "dicembre", "settimana prossima", "domani", "2024").
+2.  Se c'è un RIFERIMENTO TEMPORALE, usalo per filtrare gli eventi basandoti sulla DATA DI OGGI fornita.
+    - "dicembre" = cerca eventi nel mese di dicembre dell'anno corrente (o prossimo se siamo alla fine dell'anno).
+    - "settimana prossima" = calcola i giorni corretti basandoti sulla data odierna.
+3.  Se c'è una PAROLA CHIAVE, cerca corrispondenze parziali (case-insensitive).
+4.  Restituisci ESCLUSIVAMENTE un array JSON di stringhe (ID degli eventi). Nessun altro testo.
 `;
 
-  const userPrompt = `
-DATA DI OGGI: ${today}
-Query utente: "${query}"
+  // Pre-process events to make dates very easy for the LLM to understand without math
+  // We convert "2025-12-09T14:30:00+01:00" to "2025-12-09 (martedì)"
+  const simplifiedEvents = events.map(e => {
+      const startIso = e.start.dateTime || e.start.date || '';
+      let dateHuman = "N/A";
+      if (startIso) {
+          try {
+             const d = new Date(startIso);
+             const yyyymmdd = d.toISOString().split('T')[0];
+             const dayName = d.toLocaleDateString('it-IT', { weekday: 'long' });
+             dateHuman = `${yyyymmdd} (${dayName})`;
+          } catch(e) {
+             dateHuman = startIso;
+          }
+      }
+      return {
+          id: e.id,
+          summary: e.summary,
+          description: e.description,
+          date: dateHuman, // Field specifico per aiutare la ricerca temporale
+          rawStart: startIso // Manteniamo anche il dato grezzo
+      };
+  });
 
-Elenco eventi (considera solo i campi forniti):
-${JSON.stringify(events.map(e => ({
-    id: e.id, 
-    summary: e.summary, 
-    description: e.description, 
-    // Includiamo start/end formattati per aiutare il modello a capire le date
-    start: e.start.dateTime || e.start.date, 
-    end: e.end.dateTime || e.end.date, 
-    attendees: e.attendees
-})), null, 2)}
+  const userPrompt = `
+DATA DI OGGI: ${todayDate} (${todayDesc})
+RICHIESTA UTENTE: "${query}"
+
+LISTA EVENTI:
+${JSON.stringify(simplifiedEvents, null, 2)}
 `;
 
   const response = await ai.models.generateContent({
