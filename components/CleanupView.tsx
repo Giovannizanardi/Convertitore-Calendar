@@ -136,8 +136,11 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
         performSearch(async () => {
             try {
                 const now = new Date();
+                // Estende la ricerca a 5 anni nel passato e 5 anni nel futuro per coprire query come "settimana prossima"
                 const timeMin = new Date(now.getFullYear() - 5, now.getMonth(), now.getDate()).toISOString();
-                const fetchedEvents = await fetchEventsFromSelectedCalendars(timeMin, now.toISOString());
+                const timeMax = new Date(now.getFullYear() + 5, now.getMonth(), now.getDate()).toISOString();
+                
+                const fetchedEvents = await fetchEventsFromSelectedCalendars(timeMin, timeMax);
                 
                 if (fetchedEvents) {
                     const eventIdsToDelete = await findEventsToDelete(aiQuery, fetchedEvents);
