@@ -8,10 +8,16 @@ import type { GCalEvent } from './googleCalendarService';
 // It will be added in App.tsx after receiving the data.
 export type ApiEventObject = Omit<EventObject, 'id'>;
 
-// FIX: As per coding guidelines, the API key must be obtained exclusively
-// from `process.env.API_KEY` and is assumed to be pre-configured.
 const getAiClient = () => {
-    return new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // Utilizza process.env.API_KEY come richiesto dalle linee guida.
+    // Si assume che process.env.API_KEY sia configurato e accessibile nell'ambiente di esecuzione.
+    const apiKey = process.env.API_KEY;
+    
+    if (!apiKey) {
+        throw new Error("Chiave API non trovata. Assicurati che process.env.API_KEY sia impostata.");
+    }
+
+    return new GoogleGenAI({ apiKey });
 };
 
 const eventSchema = {
@@ -104,7 +110,6 @@ export const extractEvents = async (input: File | string): Promise<ApiEventObjec
   } catch (err: any) {
       console.error("Errore API Gemini:", err);
       // Passa attraverso il messaggio di errore specifico della chiave API.
-      // FIX: The environment variable for the API key is now `API_KEY`, not `VITE_API_KEY`.
       if (err.message?.includes('API_KEY')) {
           throw err;
       }
@@ -173,8 +178,7 @@ export const findEventsToDelete = async (query: string, events: GCalEvent[]): Pr
 
   const ai = getAiClient();
   
-  // FIX: È fondamentale passare la data odierna.
-  // Senza "Oggi è...", il modello non può risolvere riferimenti relativi come "settimana prossima" o "domani".
+  // Passiamo la data odierna per risolvere riferimenti temporali relativi
   const today = new Date().toLocaleDateString('it-IT', { 
     weekday: 'long', 
     year: 'numeric', 
