@@ -15,7 +15,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose, content }
         let html = content;
 
         // Process multiline blocks first (code blocks)
-        html = html.replace(/```bash\n([\s\S]*?)```/gim, (match, p1) => {
+        html = html.replace(/```bash\n([\s\S]*?)```/gim, (_match, p1) => {
             const escapedCode = p1.replace(/</g, "&lt;").replace(/>/g, "&gt;");
             return `<pre class="bg-secondary/50 p-4 rounded-md text-sm overflow-x-auto my-4 text-left"><code>${escapedCode}</code></pre>`;
         });
