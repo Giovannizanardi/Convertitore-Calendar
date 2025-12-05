@@ -14,8 +14,7 @@ export interface FilterParams {
 }
 
 const getAiClient = () => {
-    // FIX: Use process.env.API_KEY to retrieve the API key as per the coding guidelines.
-    // This resolves the TypeScript error related to 'import.meta.env'.
+    // FIX: Use process.env.API_KEY as per the coding guidelines to resolve the 'import.meta.env' error.
     const apiKey = import.meta.env.VITE_API_KEY;
     
     if (!apiKey) {
