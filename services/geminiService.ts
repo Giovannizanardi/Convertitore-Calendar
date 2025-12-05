@@ -14,11 +14,12 @@ export interface FilterParams {
 }
 
 const getAiClient = () => {
-    // Utilizziamo import.meta.env.VITE_API_KEY come standard per Vite.
-    const apiKey = import.meta.env.VITE_API_KEY;
+    // The API key must be obtained exclusively from the environment variable process.env.API_KEY.
+    // We assume this variable is pre-configured, valid, and accessible.
+    const apiKey = process.env.API_KEY;
     
     if (!apiKey) {
-        throw new Error("Chiave API non trovata. Assicurati che VITE_API_KEY sia impostata nelle variabili d'ambiente (.env).");
+        throw new Error("API_KEY environment variable is not set.");
     }
 
     return new GoogleGenAI({ apiKey });

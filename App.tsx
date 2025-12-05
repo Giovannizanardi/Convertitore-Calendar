@@ -5,10 +5,13 @@ import metadata from './metadata.json';
 import { Dashboard } from './components/Dashboard';
 import { ImportView } from './components/ImportView';
 import { CleanupView } from './components/CleanupView';
+import { HelpModal } from './components/HelpModal';
+import readmeContent from './README.md?raw';
 
 export default function App() {
   const [page, setPage] = useState<'dashboard' | 'import' | 'cleanup'>('dashboard');
   const [isThemeCustomizerOpen, setThemeCustomizerOpen] = useState(false);
+  const [isHelpOpen, setHelpOpen] = useState(false);
   const [appName, setAppName] = useState<string>('');
   const [appDescription, setAppDescription] = useState<string>('');
 
@@ -38,6 +41,7 @@ export default function App() {
           onGoHome={() => setPage('dashboard')} 
           showHomeButton={page !== 'dashboard'}
           onCustomizeTheme={() => setThemeCustomizerOpen(true)}
+          onOpenHelp={() => setHelpOpen(true)}
         />
         <main className="mt-8">
           {renderPage()}
@@ -46,6 +50,11 @@ export default function App() {
       <ThemeCustomizer 
         isOpen={isThemeCustomizerOpen} 
         onClose={() => setThemeCustomizerOpen(false)} 
+      />
+       <HelpModal 
+        isOpen={isHelpOpen} 
+        onClose={() => setHelpOpen(false)}
+        content={readmeContent}
       />
     </div>
   );
