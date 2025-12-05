@@ -11,7 +11,7 @@ export type ApiEventObject = Omit<EventObject, 'id'>;
 const getAiClient = () => {
     // Utilizza process.env.API_KEY come richiesto dalle linee guida.
     // Si assume che process.env.API_KEY sia configurato e accessibile nell'ambiente di esecuzione.
-    const apiKey = process.env.API_KEY;
+    const apiKey = import.meta.env.API_KEY;
     
     if (!apiKey) {
         throw new Error("Chiave API non trovata. Assicurati che process.env.API_KEY sia impostata.");
