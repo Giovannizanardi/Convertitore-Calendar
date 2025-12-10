@@ -24,6 +24,7 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
     const [events, setEvents] = useState<EventWithCalendarId[]>([]);
     const [selectedEventIds, setSelectedEventIds] = useState<Set<string>>(new Set());
     const [isDeleting, setIsDeleting] = useState(false);
+    const [deletionProgress, setDeletionProgress] = useState<{ current: number; total: number } | null>(null);
     const [aiQuery, setAiQuery] = useState('');
     const [manualFilters, setManualFilters] = useState<FilterParams>({ startDate: '', endDate: '', text: '', location: '' });
     const [isSearching, setIsSearching] = useState(false);
@@ -200,26 +201,75 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
     };
     
     const handleDeleteSelected = async () => {
-        if (selectedEventIds.size === 0 || !window.confirm(`Sei sicuro di voler eliminare ${selectedEventIds.size} eventi? Questa azione è irreversibile.`)) {
+        const totalToDelete = selectedEventIds.size;
+        if (totalToDelete === 0 || !window.confirm(`Sei sicuro di voler eliminare ${totalToDelete} eventi? Questa azione è irreversibile.`)) {
             return;
         }
 
         setIsDeleting(true);
+        setDeletionProgress({ current: 0, total: totalToDelete });
         setError(null);
 
         const eventsToDelete = events.filter(e => selectedEventIds.has(e.id));
-        const promises = eventsToDelete.map(e => gcal.deleteEvent(e.calendarId, e.id));
-        const results = await Promise.allSettled(promises);
+        const BATCH_SIZE = 10;
+        const failedDeletions: any[] = [];
+        const successfulIds = new Set<string>();
 
-        const failedDeletions = results.filter(r => r.status === 'rejected');
-        if (failedDeletions.length > 0) {
-            console.error("Failed deletions:", failedDeletions);
-            setError({ title: 'Eliminazione Parziale', message: `${failedDeletions.length} eventi non sono stati eliminati. Controlla la console.` });
+        // Helper to wait
+        const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+        try {
+            for (let i = 0; i < eventsToDelete.length; i += BATCH_SIZE) {
+                const batch = eventsToDelete.slice(i, i + BATCH_SIZE);
+                
+                // Execute batch in parallel and wait for all to settle
+                const results = await Promise.allSettled(
+                    batch.map(e => gcal.deleteEvent(e.calendarId, e.id))
+                );
+
+                results.forEach((result, index) => {
+                    const event = batch[index];
+                    if (result.status === 'fulfilled') {
+                        successfulIds.add(event.id);
+                    } else {
+                        console.error(`Failed to delete event ${event.id}:`, result.reason);
+                        failedDeletions.push({ event, error: result.reason });
+                    }
+                });
+
+                // Update progress
+                setDeletionProgress({ current: Math.min(i + BATCH_SIZE, totalToDelete), total: totalToDelete });
+
+                // Add delay if not the last batch to be gentle with the API
+                if (i + BATCH_SIZE < eventsToDelete.length) {
+                    await delay(500); // 500ms delay between batches
+                }
+            }
+        } catch (e: any) {
+            console.error("Critical error during batch deletion:", e);
+             setError({ 
+                title: 'Errore Critico', 
+                message: "Si è verificato un errore imprevisto durante l'elaborazione dei lotti." 
+            });
+        } finally {
+            // Update the events list to remove successful deletions
+            setEvents(prev => prev.filter(e => !successfulIds.has(e.id)));
+            
+            if (failedDeletions.length > 0) {
+                console.error("Summary of failed deletions:", failedDeletions);
+                setError({ 
+                    title: 'Eliminazione Parziale', 
+                    message: `${failedDeletions.length} eventi su ${totalToDelete} non sono stati eliminati. Potresti aver raggiunto il limite di richieste API o gli eventi potrebbero essere stati spostati.` 
+                });
+                // Update selection to only contain failed items so user can try again easily
+                setSelectedEventIds(new Set(failedDeletions.map(f => f.event.id)));
+            } else {
+                setSelectedEventIds(new Set());
+            }
+
+            setIsDeleting(false);
+            setDeletionProgress(null);
         }
-
-        setEvents(prev => prev.filter(e => !selectedEventIds.has(e.id)));
-        setSelectedEventIds(new Set());
-        setIsDeleting(false);
     };
 
 
@@ -403,7 +453,12 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
                                 className="bg-destructive hover:bg-destructive/90 disabled:bg-muted text-destructive-foreground font-bold py-2 px-4 rounded-lg inline-flex items-center space-x-2 transition-colors"
                             >
                                 {isDeleting ? <Loader className="h-5 w-5" /> : <Trash2Icon className="h-5 w-5" />}
-                                <span>Elimina {selectedEventIds.size} Eventi</span>
+                                <span>
+                                    {isDeleting && deletionProgress 
+                                        ? `Eliminazione (${deletionProgress.current}/${deletionProgress.total})...`
+                                        : `Elimina ${selectedEventIds.size} Eventi`
+                                    }
+                                </span>
                             </button>
                         </div>
                         
