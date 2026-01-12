@@ -39,7 +39,8 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
     const [gcalError, setGCalError] = useState<GCalError | null>(null);
     
     const [calendars, setCalendars] = useState<Calendar[]>([]);
-    const [selectedCalendarId, setSelectedCalendarId] = useState('');
+    const [selectedCalendarId, setSelectedCalendarId] = useState(''); // Default calendar for all events
+    const [eventCalendarMappings, setEventCalendarMappings] = useState<Record<number, string>>({}); // Mapping for individual events
     const [importProgress, setImportProgress] = useState(0);
     const [user, setUser] = useState<{ email: string } | null>(null);
     const [importResult, setImportResult] = useState<ImportResult | null>(null);
@@ -79,6 +80,12 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
             const primaryCalendar = calendarList.find((c: Calendar) => c.primary) || calendarList[0];
             if (primaryCalendar) {
                 setSelectedCalendarId(primaryCalendar.id);
+                // Initialize all events to the primary calendar by default
+                const initialMappings: Record<number, string> = {};
+                events.forEach(event => {
+                    initialMappings[event.id] = primaryCalendar.id;
+                });
+                setEventCalendarMappings(initialMappings);
             }
         } catch (error: any) {
             console.error('Error fetching calendars:', error);
@@ -88,7 +95,7 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
                 message: `Non è stato possibile recuperare i tuoi calendari da Google. ${error.message}. Prova ad accedere di nuovo.`
             });
         }
-    }, []);
+    }, [events]); // Re-run if events change to initialize mappings
 
     const handleTokenResponse = useCallback(async (tokenResponse: any, isSilent: boolean) => {
         // Clear any previous error message when a new token response is received
@@ -233,6 +240,27 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
         // Per semplicità, non mostriamo una schermata di successo separata per JSON
     };
 
+    const handleDefaultCalendarChange = (calendarId: string) => {
+        setSelectedCalendarId(calendarId);
+    };
+
+    const handleEventCalendarChange = (eventId: number, calendarId: string) => {
+        setEventCalendarMappings(prev => ({ ...prev, [eventId]: calendarId }));
+    };
+
+    const handleApplyDefaultToUnmapped = () => {
+        if (!selectedCalendarId) return;
+
+        setEventCalendarMappings(prev => {
+            const newMappings = { ...prev };
+            events.forEach(event => {
+                if (!newMappings[event.id]) {
+                    newMappings[event.id] = selectedCalendarId;
+                }
+            });
+            return newMappings;
+        });
+    };
     
     const handleImport = async () => {
         setGCalState('importing');
@@ -243,8 +271,17 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
 
         for (let i = 0; i < events.length; i++) {
             const event = events[i];
+            // Use the specific mapping for the event, or the default if not set
+            const targetCalendarId = eventCalendarMappings[event.id] || selectedCalendarId;
+            
+            if (!targetCalendarId) {
+                // This should not happen if the UI disables the button, but as a safeguard
+                failures.push({ event, error: "Nessun calendario selezionato per questo evento." });
+                continue;
+            }
+
             try {
-                const result = await gcal.insertEvent(selectedCalendarId, event);
+                const result = await gcal.insertEvent(targetCalendarId, event);
                  if (result) {
                     successCount++;
                 } else {
@@ -271,6 +308,7 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
         setUser(null);
         setCalendars([]);
         setSelectedCalendarId('');
+        setEventCalendarMappings({}); // Reset mappings
         if (goToChoice) {
             setView('choice');
         }
@@ -283,6 +321,8 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
         await handleAuth('select_account');
     };
 
+    // Determine if the import button should be disabled
+    const isImportButtonDisabled = events.length === 0 || (!selectedCalendarId && Object.keys(eventCalendarMappings).length === 0);
 
     const CsvView = () => (
         <div className="animate-fade-in text-center">
@@ -373,23 +413,63 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
                                 <span className="hidden sm:inline">Cambia Account Google</span>
                             </button>
                         </div>
-                        <div className="bg-card/50 p-6 rounded-lg border border-border">
-                             <label htmlFor="calendar-select" className="block mb-2 text-sm font-medium text-muted-foreground">Seleziona un calendario per l'importazione:</label>
+
+                        {/* Default Calendar Selection */}
+                        <div className="bg-card/50 p-6 rounded-lg border border-border mb-6">
+                             <label htmlFor="default-calendar-select" className="block mb-2 text-sm font-medium text-muted-foreground">Calendario predefinito per i nuovi eventi e quelli non assegnati:</label>
                              <select
-                                id="calendar-select"
+                                id="default-calendar-select"
                                 value={selectedCalendarId}
-                                onChange={(e) => setSelectedCalendarId(e.target.value)}
+                                onChange={(e) => handleDefaultCalendarChange(e.target.value)}
                                 className="bg-input border border-border text-foreground text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
                              >
                                 {calendars.map(cal => (
                                     <option key={cal.id} value={cal.id}>{cal.summary}</option>
                                 ))}
                              </select>
+                            <button
+                                onClick={handleApplyDefaultToUnmapped}
+                                className="mt-3 w-full bg-secondary hover:bg-muted text-secondary-foreground font-semibold py-2 px-3 rounded-md transition-colors text-sm"
+                                disabled={!selectedCalendarId}
+                            >
+                                Applica calendario predefinito a tutti gli eventi non assegnati
+                            </button>
                         </div>
+
+                        {/* Event Specific Calendar Mapping */}
+                        {events.length > 0 && (
+                            <div className="bg-card/50 p-6 rounded-lg border border-border mb-6 max-h-96 overflow-y-auto">
+                                <h4 className="text-lg font-bold text-foreground mb-4">Assegna Calendari per Evento ({events.length} totali)</h4>
+                                <div className="space-y-4">
+                                    {events.map(event => (
+                                        <div key={event.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 bg-secondary/30 rounded-md">
+                                            <p className="font-semibold text-foreground flex-grow pr-4 mb-2 sm:mb-0 text-ellipsis overflow-hidden whitespace-nowrap">{event.subject}</p>
+                                            <div className="w-full sm:w-1/2">
+                                                <label htmlFor={`event-cal-select-${event.id}`} className="sr-only">Calendario per {event.subject}</label>
+                                                <select
+                                                    id={`event-cal-select-${event.id}`}
+                                                    // Use specific mapping or default selected calendar
+                                                    value={eventCalendarMappings[event.id] || selectedCalendarId} 
+                                                    onChange={(e) => handleEventCalendarChange(event.id, e.target.value)}
+                                                    className="bg-input border border-border text-foreground text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
+                                                >
+                                                    {calendars.map(cal => (
+                                                        <option key={cal.id} value={cal.id}>{cal.summary}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Import button */}
                         <div className="mt-8 flex justify-center space-x-4">
                             <button
                                 onClick={handleImport}
                                 className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-8 rounded-full shadow-lg shadow-primary/20 transform hover:scale-105 transition-all duration-300"
+                                disabled={isImportButtonDisabled}
                             >
                                 Importa {events.length} Eventi
                             </button>

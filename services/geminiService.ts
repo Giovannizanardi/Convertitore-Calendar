@@ -1,10 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import type { EventObject } from '../lib/types';
+import type { EventObject, ValidatedEvent } from '../lib/types';
 import type { Part } from "@google/genai";
-
-// FIX: Rimosse le dichiarazioni di interfaccia ImportMetaEnv e ImportMeta.
-// Queste dichiarazioni sono ridondanti in un progetto Vite con "types": ["vite/client"] in tsconfig.json.
-// TypeScript gestisce già correttamente la tipizzazione di `import.meta.env`.
 
 // The service will return a raw object without the `id` field.
 // It will be added in App.tsx after receiving the data.
@@ -18,13 +14,12 @@ export interface FilterParams {
 }
 
 const getAiClient = () => {
-    // Per un'applicazione Vite frontend, le variabili d'ambiente sono esposte tramite `import.meta.env`.
-    // La direttiva `process.env.API_KEY` nelle linee guida è per ambienti Node.js.
-    // L'uso di `import.meta.env.VITE_API_KEY` è necessario affinché l'applicazione funzioni correttamente.
-    const apiKey = import.meta.env.VITE_API_KEY;
+    // FIX: Allineato all'uso di `process.env.API_KEY` come specificato nelle linee guida di `@google/genai`.
+    // Si assume che `process.env.API_KEY` sia reso disponibile e accessibile nell'ambiente di esecuzione.
+    const apiKey = process.env.API_KEY;
     
     if (!apiKey) {
-        throw new Error("La variabile d'ambiente VITE_API_KEY non è impostata. Per favore, assicurati che sia definita nel tuo file .env (es. VITE_API_KEY=LaTuaChiaveAPI).");
+        throw new Error("La variabile d'ambiente API_KEY non è impostata. Per favor, assicurati che sia definita nel tuo ambiente.");
     }
 
     return new GoogleGenAI({ apiKey });
@@ -53,200 +48,187 @@ Segui queste regole con precisione:
 1.  Il tuo output DEVE essere un array JSON valido di oggetti evento. Non includere altro testo, spiegazioni o formattazione markdown.
 2.  Estrai i seguenti campi per ogni evento: subject, startDate, startTime, endDate, endTime, description, location.
 3.  Sii molto flessibile con i formati di data e ora di input (es. GG/MM/AAAA, MM-GG-AAAA, AAAA.MM.GG, Mese GG, AAAA, 2pm, 14:00).
-4.  Quando fornisci le date, normalizzale rigorosamente nel formato AAAA-MM-GG.
-5.  Quando fornisci gli orari, normalizzale rigorosamente nel formato HH:mm (24 ore).
-6.  Se un anno non è specificato per una data, supponi che l'anno corrente sia ${currentYear}.
-7.  Se l'orario di fine o la durata di un evento non sono specificati, calcola un orario di fine che sia esattamente 1 ora dopo l'orario di inizio.
-8.  Se una data di fine non è specificata, supponi che sia la stessa della data di inizio.
-9.  Se un campo come 'description' o 'location' non è presente per un evento, devi restituire una stringa vuota "" per quel campo.
-10. Il campo 'subject' è obbligatorio. Se non riesci a determinare un oggetto per una riga o una sezione, salta completamente quel record e non includerlo nell'array di output.
+4.  Quando fornisci le date, normalizzale rigorosamente nel formato AAAA-MM-GG. Se l'anno non è specificato, assumi l'anno corrente (${currentYear}).
+5.  Quando fornisci gli orari, normalizzale rigorosamente nel formato HH:mm (24-hour). Se l'ora non è specificata, assumi le 09:00. Se viene specificata solo l'ora di inizio, assumi che l'evento duri un'ora.
+6.  Se la data di fine non è specificata, assumi che sia la stessa della data di inizio.
+7.  Se non ci sono eventi da estrarre, restituisci un array vuoto: [].
+8.  Considera i nomi dei mesi e dei giorni della settimana in italiano.
+9.  Se il contenuto contiene immagini, concentrati sul testo all'interno delle immagini per gli eventi.
+
+Contenuto da analizzare:
 `;
 };
 
-const fileToGenerativePart = async (file: File): Promise<Part> => {
-    const base64EncodedData = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve((reader.result as string).split(',')[1]);
-      reader.onerror = (e) => reject(e);
-      reader.readAsDataURL(file);
+// FIX: Helper function to convert a File to a base64 encoded string.
+async function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = error => reject(error);
+        reader.readAsDataURL(file);
     });
-    
-    return {
-      inlineData: {
-        mimeType: file.type,
-        data: base64EncodedData
-      }
-    };
-  };
+}
 
-const cleanJson = (text: string): string => {
-    // Rimuove i backtick del markdown e il prefisso json se presente
-    return text.replace(/```json/g, '').replace(/```/g, '').trim();
-};
-
-export const extractEvents = async (input: File | string): Promise<ApiEventObject[]> => {
-  if (!input) {
-    throw new Error("L'input non può essere vuoto.");
-  }
-
-  try {
+// FIX: Aggiunta la funzione `extractEvents` per estrarre eventi da testo o file utilizzando l'API Gemini.
+// La funzione gestisce l'input di testo e immagini, strutturando la richiesta per l'estrazione JSON.
+export async function extractEvents(input: string | File): Promise<ApiEventObject[]> {
     const ai = getAiClient();
-    
-    const contents = typeof input === 'string'
-      ? { parts: [{ text: input }] }
-      : { parts: [await fileToGenerativePart(input)] };
+    const extractionPrompt = getExtractionPrompt();
+    let contents: (string | Part)[] = [];
+    let modelName = 'gemini-3-flash-preview'; // Default for text tasks
 
-    const systemInstruction = getExtractionPrompt();
+    if (typeof input === 'string') {
+        contents = [{text: extractionPrompt + input}];
+    } else { // File input
+        const mimeType = input.type;
+        const base64Data = (await fileToBase64(input)).split(',')[1]; // Remove data:mime/type;base64, prefix
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents,
-      config: {
-          systemInstruction,
-          responseMimeType: "application/json",
-          responseSchema: {
-              type: Type.ARRAY,
-              items: eventSchema
-          }
-      }
-    });
-    
-    try {
-      const jsonText = cleanJson(response.text ?? '');
-      if (!jsonText) {
-        return [];
-      }
-      const parsedEvents: ApiEventObject[] = JSON.parse(jsonText);
-      return parsedEvents;
-    } catch (e) {
-        console.error("Impossibile analizzare la risposta JSON dall'IA:", response.text);
-        throw new Error("Il modello IA ha restituito una struttura dati non valida. Controlla il contenuto del file e riprova.");
-    }
-  } catch (err: any) {
-      console.error("Errore API Gemini:", err);
-      // Passa attraverso il messaggio di errore specifico della chiave API.
-      if (err.message?.includes('API_KEY')) {
-          throw err;
-      }
-      // Controlla errori specifici come sovraccarico o indisponibilità
-      if (err.message && (err.message.includes('503') || /overload|unavailable|rate limit/i.test(err.message))) {
-          throw new Error("Il servizio di intelligenza artificiale è attualmente sovraccarico o non disponibile. Per favore, attendi un momento e riprova.");
-      }
-      // Lancia un errore più generico per altri problemi API
-      throw new Error("Si è verificato un errore di comunicazione con il servizio AI. Controlla la tua connessione o la configurazione della chiave API.");
-  }
-};
-
-export const suggestCorrection = async (event: EventObject, fieldToCorrect: keyof Omit<EventObject, 'id'>): Promise<string | null> => {
-  const ai = getAiClient();
-  const systemInstruction = `
-Sei un assistente intelligente per la correzione dei dati. Il tuo compito è correggere un campo specifico che è stato contrassegnato come non valido. Fornisci una correzione plausibile per il campo specificato.
-
-Basandoti sul contesto dell'intero evento, suggerisci un valore corretto.
-- Per le date (startDate, endDate), usa rigorosamente il formato GG-MM-AAAA.
-- Per gli orari (startTime, endTime), usa rigorosamente il formato HH:mm.
-- Sii il più logico possibile. Ad esempio, se la data di inizio è "30/02/2024", una buona correzione sarebbe "29-02-2024".
-
-Restituisci SOLO un oggetto JSON con una singola chiave "suggestion" contenente il valore stringa corretto. Non includere altro testo o markdown.
-`;
-  const userPrompt = `
-Dati originali dell'evento:
-${JSON.stringify(event, null, 2)}
-
-Il campo da correggere è: "${fieldToCorrect}".
-Il valore non valido corrente è: "${event[fieldToCorrect]}".
-`;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: userPrompt,
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            suggestion: { type: Type.STRING }
-          },
-          required: ['suggestion']
+        if (mimeType.startsWith('image/')) {
+            modelName = 'gemini-2.5-flash-image'; // Use image model for image inputs
+            contents = [
+                {text: extractionPrompt}, // Send the prompt as text
+                {
+                    inlineData: {
+                        mimeType: mimeType,
+                        data: base64Data,
+                    },
+                },
+            ];
+        } else if (mimeType === 'text/plain' || mimeType === 'application/pdf' || mimeType.includes('officedocument')) {
+            // For text-based files, read content and send as text
+            const textContent = await input.text();
+            contents = [{text: extractionPrompt + textContent}];
+        } else {
+            throw new Error(`Tipo di file non supportato per l'estrazione: ${mimeType}`);
         }
-      }
-    });
-
-    const jsonText = cleanJson(response.text ?? '');
-    if (!jsonText) {
-      return null;
     }
-    const parsedResponse = JSON.parse(jsonText);
-    return parsedResponse.suggestion || null;
 
-  } catch (e) {
-    console.error("Impossibile ottenere il suggerimento di correzione dall'IA:", e);
-    return null;
-  }
-};
+    try {
+        const response = await ai.models.generateContent({
+            model: modelName,
+            contents: { parts: contents }, // Wrap contents in a 'parts' object for multiple parts
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: eventSchema
+                },
+            },
+        });
 
-export const parseFilterFromQuery = async (query: string): Promise<FilterParams> => {
-  if (!query) throw new Error("La query non può essere vuota.");
+        const jsonStr = response.text?.trim();
+        if (!jsonStr) {
+            throw new Error("La risposta dell'IA non contiene dati JSON validi.");
+        }
+        
+        // Ensure the response is an array
+        const parsedResponse = JSON.parse(jsonStr);
+        if (!Array.isArray(parsedResponse)) {
+            throw new Error("La risposta dell'IA non è un array di eventi.");
+        }
+        return parsedResponse as ApiEventObject[];
+    } catch (error) {
+        console.error("Errore nell'estrazione degli eventi dall'IA:", error);
+        // Custom error message for API overload
+        if ((error as any).status === 500 || ((error as any).message?.includes('Internal Server Error') || (error as any).message?.includes('The service is currently overloaded or unavailable.'))) {
+            throw new Error("Il servizio IA è attualmente sovraccarico o non disponibile. Riprova tra qualche istante.");
+        }
+        throw error;
+    }
+}
 
-  const ai = getAiClient();
-  
-  const now = new Date();
-  const todayDate = now.toISOString().split('T')[0];
-  const todayDesc = now.toLocaleDateString('it-IT', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
+// FIX: Aggiunta la funzione `suggestCorrection` per suggerire correzioni a un campo specifico di un evento utilizzando l'API Gemini.
+// La funzione invia un prompt all'IA per ottenere un valore corretto per il campo invalidato.
+export async function suggestCorrection(event: EventObject, field: keyof Omit<EventObject, 'id'>): Promise<string | undefined> {
+    const ai = getAiClient();
+    const prompt = `
+Hai un evento con i seguenti dettagli:
+Oggetto: ${event.subject}
+Data Inizio: ${event.startDate}
+Ora Inizio: ${event.startTime}
+Data Fine: ${event.endDate}
+Ora Fine: ${event.endTime}
+Luogo: ${event.location}
+Descrizione: ${event.description}
 
-  const systemInstruction = `
-Sei un assistente intelligente che aiuta a compilare filtri di ricerca per calendari.
-Il tuo compito è tradurre la richiesta dell'utente in parametri precisi per i campi di ricerca.
+Il campo "${field}" è invalido o formattato in modo errato. Il valore corrente è: "${event[field]}".
+Per favore, suggerisci un valore corretto per il campo "${field}" basandoti sul contesto dell'evento.
+Normalizza le date al formato AAAA-MM-GG e gli orari al formato HH:mm.
+Rispondi SOLO con il valore corretto per il campo, senza spiegazioni o testo aggiuntivo.`;
 
-Campi da compilare:
-1. startDate (YYYY-MM-DD): Data inizio del periodo.
-2. endDate (YYYY-MM-DD): Data fine del periodo.
-3. text: Parole chiave da cercare nell'oggetto o descrizione.
-4. location: Parole chiave per il luogo.
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: [{text: prompt}],
+            config: {
+                // We expect a simple string response for the correction
+                responseMimeType: "text/plain",
+            }
+        });
 
-Regole:
-- OGGI è: ${todayDate} (${todayDesc}). Usa questa data per calcolare riferimenti come "settimana prossima", "ieri", "dicembre" (se siamo a novembre, intende dicembre di quest'anno; se siamo a gennaio, dicembre scorso o prossimo in base al contesto, di default usa il futuro prossimo se ambiguo).
-- Se l'utente specifica un periodo (es. "Dicembre"), compila startDate con il primo giorno e endDate con l'ultimo.
-- Se l'utente non specifica date, lascia startDate e endDate vuote ("").
-- Se l'utente specifica un argomento (es. "Colloqui"), mettilo in "text".
-- Se l'utente specifica un luogo (es. "in ufficio", "sala riunioni"), mettilo in "location".
-- Rimuovi le parole temporali dal campo "text" (es. se cerca "colloqui domani", "text" deve essere solo "colloqui").
-`;
+        const correction = response.text?.trim();
+        if (correction) {
+            return correction;
+        }
+        return undefined;
+    } catch (error) {
+        console.error(`Errore nel suggerire la correzione per il campo ${field}:`, error);
+        throw error;
+    }
+}
 
-  const userPrompt = `Query utente: "${query}"`;
+// FIX: Aggiunta la funzione `parseFilterFromQuery` per estrarre i parametri di filtro da una query testuale.
+// Utilizza l'IA per interpretare una query in linguaggio naturale e convertirla in un oggetto `FilterParams`.
+export async function parseFilterFromQuery(query: string): Promise<FilterParams> {
+    const ai = getAiClient();
+    const currentYear = new Date().getFullYear();
+    const prompt = `
+Analizza la seguente query e estrai i parametri per filtrare gli eventi del calendario.
+Normalizza le date al formato AAAA-MM-GG. Se l'anno non è specificato, assumi l'anno corrente (${currentYear}).
+Se un parametro non è menzionato nella query, lascia il suo valore come stringa vuota.
 
-  const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: userPrompt,
-      config: {
-          systemInstruction,
-          responseMimeType: "application/json",
-          responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                  startDate: { type: Type.STRING },
-                  endDate: { type: Type.STRING },
-                  text: { type: Type.STRING },
-                  location: { type: Type.STRING }
-              },
-              required: ['startDate', 'endDate', 'text', 'location']
-          }
-      }
-  });
+Query: "${query}"`;
 
-  try {
-      const jsonText = cleanJson(response.text ?? '');
-      if (!jsonText) throw new Error("Risposta vuota");
-      return JSON.parse(jsonText) as FilterParams;
-  } catch (e) {
-      console.error("Errore parsing AI:", response.text);
-      throw new Error("Impossibile interpretare la richiesta.");
-  }
-};
+    const filterSchema = {
+        type: Type.OBJECT,
+        properties: {
+            startDate: { type: Type.STRING, description: 'Data di inizio filtro (AAAA-MM-GG). Stringa vuota se non specificata.' },
+            endDate: { type: Type.STRING, description: 'Data di fine filtro (AAAA-MM-GG). Stringa vuota se non specificata.' },
+            text: { type: Type.STRING, description: 'Testo da cercare nel riepilogo o nella descrizione. Stringa vuota se non specificata.' },
+            location: { type: Type.STRING, description: 'Luogo dell\'evento da filtrare. Stringa vuota se non specificata.' },
+        },
+        required: [], // All fields are optional from the query perspective
+        propertyOrdering: ['startDate', 'endDate', 'text', 'location']
+    };
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: [{text: prompt}],
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: filterSchema,
+            },
+        });
+
+        const jsonStr = response.text?.trim();
+        if (!jsonStr) {
+            throw new Error("La risposta dell'IA non contiene dati JSON validi per i filtri.");
+        }
+        
+        const parsedResponse = JSON.parse(jsonStr);
+        // Ensure all properties are present, even if empty, to match FilterParams
+        const result: FilterParams = {
+            startDate: parsedResponse.startDate || '',
+            endDate: parsedResponse.endDate || '',
+            text: parsedResponse.text || '',
+            location: parsedResponse.location || '',
+        };
+        
+        return result;
+
+    } catch (error) {
+        console.error("Errore nell'analisi della query di filtro dall'IA:", error);
+        throw error;
+    }
+}
