@@ -2,18 +2,6 @@ import { GoogleGenAI, Type } from "@google/genai";
 import type { EventObject } from '../lib/types';
 import type { Part } from "@google/genai";
 
-// FIX: Declare ImportMetaEnv and extend ImportMeta to correctly type environment variables
-// This is typically handled by `vite-env.d.ts` in a Vite project, but added here for self-containment
-// if the global type declaration is not picked up by the TypeScript configuration.
-declare global {
-  interface ImportMeta {
-    readonly env: {
-      readonly VITE_API_KEY: string;
-      // Add other VITE_ variables if they are used elsewhere in the project and need typing.
-    };
-  }
-}
-
 // The service will return a raw object without the `id` field.
 // It will be added in App.tsx after receiving the data.
 export type ApiEventObject = Omit<EventObject, 'id'>;
@@ -26,13 +14,13 @@ export interface FilterParams {
 }
 
 const getAiClient = () => {
-    // FIX: Revert to import.meta.env.VITE_API_KEY to correctly access environment variables in a Vite project.
-    // The `process.env` is specific to Node.js environments and not directly available in browser-side code
-    // compiled with Vite, which exposes env vars via `import.meta.env.VITE_VAR_NAME`.
-    const apiKey = import.meta.env.VITE_API_KEY;
+    // Fix: Adhere to coding guidelines by using `process.env.API_KEY` for the API key.
+    // This also resolves the TypeScript error as `process.env` is assumed to be correctly typed and available
+    // according to the coding guidelines' assumptions for the execution context.
+    const apiKey = process.env.API_KEY;
     
     if (!apiKey) {
-        throw new Error("La variabile d'ambiente VITE_API_KEY non è impostata.");
+        throw new Error("La variabile d'ambiente API_KEY non è impostata.");
     }
 
     return new GoogleGenAI({ apiKey });
