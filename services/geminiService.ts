@@ -15,7 +15,7 @@ export interface FilterParams {
 
 const getAiClient = () => {
     // FIX: Use process.env.API_KEY as per the coding guidelines to resolve the 'import.meta.env' error.
-    const apiKey = import.meta.env.VITE_API_KEY;
+    const apiKey = process.env.API_KEY;
     
     if (!apiKey) {
         throw new Error("La variabile d'ambiente API_KEY non è impostata.");

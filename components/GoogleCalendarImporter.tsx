@@ -3,7 +3,7 @@ import type { ValidatedEvent } from '../lib/types';
 import { generateCsvContent } from '../lib/csv';
 import { generateIcsContent } from '../lib/ics';
 import * as gcal from '../services/googleCalendarService';
-import { DownloadIcon, CheckCircleIcon, GoogleIcon, CalendarPlusIcon, CalendarDaysIcon, JsonIcon } from './Icons';
+import { DownloadIcon, CheckCircleIcon, GoogleIcon, CalendarPlusIcon, CalendarDaysIcon, JsonIcon, RefreshCwIcon } from './Icons';
 import { Loader } from './Loader';
 
 interface GoogleCalendarImporterProps {
@@ -91,6 +91,9 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
     }, []);
 
     const handleTokenResponse = useCallback(async (tokenResponse: any, isSilent: boolean) => {
+        // Clear any previous error message when a new token response is received
+        setGCalError(null); 
+
         if (tokenResponse.error) {
             let title = "Errore di Autenticazione";
             let message = "Si è verificato un errore sconosciuto durante l'autenticazione.";
@@ -119,7 +122,7 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
         }
 
         if (tokenResponse.access_token) {
-            // BUG FIX: Imposta il token per il client GAPI. Questo è essenziale
+            // Imposta il token per il client GAPI. Questo è essenziale
             // per autorizzare le chiamate API successive.
             window.gapi.client.setToken(tokenResponse);
             
@@ -152,6 +155,19 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
         }
     }, [fetchCalendars]);
 
+    // This function now handles the initial authentication call with a default 'consent' prompt
+    const handleAuth = async (promptType: 'consent' | 'select_account' | '' = 'consent') => {
+        setGCalState('authenticating');
+        setGCalError(null);
+        try {
+            await gcal.handleAuthClick((token) => handleTokenResponse(token, false), promptType);
+        } catch (error: any) {
+            console.error('Auth Click Setup Error:', error);
+            setGCalError({ title: 'Errore di Configurazione', message: error.message });
+            setGCalState('error');
+        }
+    };
+
     useEffect(() => {
         if (view !== 'gcal' || gcalState !== 'initial') return;
 
@@ -159,6 +175,7 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
         
         const trySilentLogin = async () => {
             try {
+                // handleSilentAuth now uses handleAuthClick internally with '' promptType
                 await gcal.handleSilentAuth((token) => handleTokenResponse(token, true));
             } catch (error: any) {
                 console.error("Silent Auth Setup Error:", error);
@@ -216,17 +233,6 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
         // Per semplicità, non mostriamo una schermata di successo separata per JSON
     };
 
-    const handleAuth = async () => {
-        setGCalState('authenticating');
-        setGCalError(null);
-        try {
-            await gcal.handleAuthClick((token) => handleTokenResponse(token, false));
-        } catch (error: any) {
-            console.error('Auth Click Setup Error:', error);
-            setGCalError({ title: 'Errore di Configurazione', message: error.message });
-            setGCalState('error');
-        }
-    };
     
     const handleImport = async () => {
         setGCalState('importing');
@@ -256,16 +262,26 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
         setGCalState('complete');
     };
     
-    const handleResetGCal = (backToChoice = false) => {
+    // Resets the GCal importer state back to initial or authenticated based on params
+    const resetGCalState = (goToChoice = false) => {
         setGCalState('initial');
         setGCalError(null);
         setImportResult(null);
         setImportProgress(0);
         setUser(null);
-        if (backToChoice) {
+        setCalendars([]);
+        setSelectedCalendarId('');
+        if (goToChoice) {
             setView('choice');
         }
     }
+
+    // Handler for "Change Google Account" button
+    const handleSwitchAccount = async () => {
+        // Explicitly start auth flow with 'select_account' prompt to force account selection
+        resetGCalState(); // Clear current state
+        await handleAuth('select_account');
+    };
 
 
     const CsvView = () => (
@@ -329,16 +345,16 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
                         }
                          <div className="mt-6 flex justify-center space-x-4">
                             <button
-                                onClick={handleAuth}
+                                onClick={() => handleAuth()} // Default 'consent' prompt
                                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-full transition-colors"
                             >
                                 Apri Finestra di Accesso Google
                             </button>
                              <button
-                                onClick={() => setView('choice')}
+                                onClick={() => resetGCalState(true)}
                                 className="bg-secondary hover:bg-muted text-secondary-foreground font-bold py-2 px-6 rounded-full transition-colors"
                             >
-                                Torna Indietro
+                                Annulla
                             </button>
                         </div>
                     </div>
@@ -346,7 +362,17 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
             case 'authenticated':
                 return (
                     <div className="max-w-lg mx-auto animate-fade-in">
-                        <p className="text-center text-muted-foreground mb-2">Accesso effettuato come <span className="font-semibold text-foreground">{user?.email}</span></p>
+                        <div className="flex justify-between items-center mb-4">
+                            <p className="text-muted-foreground">Accesso effettuato come <span className="font-semibold text-foreground">{user?.email}</span></p>
+                            <button
+                                onClick={handleSwitchAccount}
+                                className="flex items-center space-x-2 text-sm bg-secondary hover:bg-muted text-secondary-foreground font-semibold py-2 px-3 rounded-md transition-colors"
+                                title="Cambia account Google"
+                            >
+                                <RefreshCwIcon className="h-4 w-4" />
+                                <span className="hidden sm:inline">Cambia Account Google</span>
+                            </button>
+                        </div>
                         <div className="bg-card/50 p-6 rounded-lg border border-border">
                              <label htmlFor="calendar-select" className="block mb-2 text-sm font-medium text-muted-foreground">Seleziona un calendario per l'importazione:</label>
                              <select
@@ -368,7 +394,7 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
                                 Importa {events.length} Eventi
                             </button>
                              <button
-                                onClick={() => handleResetGCal(true)}
+                                onClick={() => resetGCalState(true)}
                                 className="bg-secondary hover:bg-muted text-secondary-foreground font-bold py-2 px-4 rounded-full transition-colors"
                             >
                                 Annulla
@@ -417,7 +443,7 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
                                 Inizia di Nuovo
                             </button>
                              <button
-                                onClick={() => handleResetGCal(true)}
+                                onClick={() => resetGCalState(true)}
                                 className="bg-secondary hover:bg-muted text-secondary-foreground font-bold py-2 px-6 rounded-full transition-colors"
                             >
                                 Torna Indietro
@@ -434,13 +460,13 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
                         </div>
                          <div className="mt-8 flex justify-center space-x-4">
                             <button
-                                onClick={handleAuth}
+                                onClick={() => handleAuth('consent')} // Offer a way to re-authenticate
                                 className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-2 px-6 rounded-full transition-colors"
                             >
                                 Riprova Accesso
                             </button>
                              <button
-                                onClick={() => handleResetGCal(true)}
+                                onClick={() => resetGCalState(true)}
                                 className="bg-secondary hover:bg-muted text-secondary-foreground font-bold py-2 px-6 rounded-full transition-colors"
                             >
                                 Torna Indietro
@@ -506,7 +532,7 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
                             <CalendarDaysIcon className="h-12 w-12 mb-4 text-primary" />
                             <h3 className="text-lg font-bold text-foreground mb-2">Scarica come .ICS (Universale)</h3>
                             <p className="text-muted-foreground text-sm mb-6 flex-grow">
-                                Esporta un file .ics standard, compatibile con Apple Calendar, Microsoft Outlook e la maggior parte delle altre app di calendario.
+                                Esporta un file .ics standard, compatibile con Apple Calendar, Outlook e la maggior parte delle altre app di calendario.
                             </p>
                             <button
                                 onClick={handleDownloadIcs}
