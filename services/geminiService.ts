@@ -14,13 +14,11 @@ export interface FilterParams {
 }
 
 const getAiClient = () => {
-    // FIX: According to @google/genai coding guidelines, the API key must be obtained
-    // exclusively from `process.env.API_KEY`. This overrides environment-specific
-    // access methods like `import.meta.env` for this specific SDK.
-    const apiKey = process.env.API_KEY;
+    // FIX: Use process.env.API_KEY as per the coding guidelines to resolve the 'import.meta.env' error.
+    const apiKey = import.meta.env.VITE_API_KEY;
     
     if (!apiKey) {
-        throw new Error("La variabile d'ambiente API_KEY non è impostata. Per favore, assicurati che sia definita nel tuo file .env (es. API_KEY=LaTuaChiaveAPI) e che sia accessibile in questo contesto di esecuzione.");
+        throw new Error("La variabile d'ambiente API_KEY non è impostata.");
     }
 
     return new GoogleGenAI({ apiKey });
