@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import type { EventObject } from '../lib/types';
+import type { EventObject }T;
 import type { Part } from "@google/genai";
 
 // The service will return a raw object without the `id` field.
@@ -15,7 +15,7 @@ export interface FilterParams {
 
 const getAiClient = () => {
     // FIX: Use process.env.API_KEY as per the coding guidelines to resolve the 'import.meta.env' error.
-    const apiKey = import.meta.env.VITE_API_KEY;
+    const apiKey = process.env.API_KEY;
     
     if (!apiKey) {
         throw new Error("La variabile d'ambiente API_KEY non è impostata.");

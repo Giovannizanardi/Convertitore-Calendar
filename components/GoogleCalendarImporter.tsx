@@ -3,7 +3,7 @@ import type { ValidatedEvent } from '../lib/types';
 import { generateCsvContent } from '../lib/csv';
 import { generateIcsContent } from '../lib/ics';
 import * as gcal from '../services/googleCalendarService';
-import { DownloadIcon, CheckCircleIcon, GoogleIcon, CalendarPlusIcon, CalendarDaysIcon, JsonIcon } from './Icons';
+import { DownloadIcon, CheckCircleIcon, GoogleIcon, CalendarPlusIcon, CalendarDaysIcon, JsonIcon, RefreshCwIcon } from './Icons';
 import { Loader } from './Loader';
 
 interface GoogleCalendarImporterProps {
@@ -262,6 +262,8 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
         setImportResult(null);
         setImportProgress(0);
         setUser(null);
+        // Chiamata alla nuova funzione per pulire il token GAPI
+        gcal.clearAuthToken(); 
         if (backToChoice) {
             setView('choice');
         }
@@ -346,7 +348,19 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
             case 'authenticated':
                 return (
                     <div className="max-w-lg mx-auto animate-fade-in">
-                        <p className="text-center text-muted-foreground mb-2">Accesso effettuato come <span className="font-semibold text-foreground">{user?.email}</span></p>
+                        <div className="flex justify-center items-center gap-4 mb-4">
+                            <p className="text-center text-muted-foreground">
+                                Accesso effettuato come <span className="font-semibold text-foreground">{user?.email}</span>
+                            </p>
+                            <button
+                                onClick={() => handleResetGCal(true)} // Torna alla scelta dei metodi di importazione
+                                className="flex items-center space-x-2 text-sm bg-secondary hover:bg-muted text-secondary-foreground font-semibold py-2 px-3 rounded-md transition-colors"
+                                title="Cambia Account Google"
+                            >
+                                <RefreshCwIcon className="h-4 w-4" />
+                                <span>Cambia Account</span>
+                            </button>
+                        </div>
                         <div className="bg-card/50 p-6 rounded-lg border border-border">
                              <label htmlFor="calendar-select" className="block mb-2 text-sm font-medium text-muted-foreground">Seleziona un calendario per l'importazione:</label>
                              <select
@@ -368,7 +382,7 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
                                 Importa {events.length} Eventi
                             </button>
                              <button
-                                onClick={() => handleResetGCal(true)}
+                                onClick={() => handleResetGCal(true)} // Torna alla scelta dei metodi di importazione
                                 className="bg-secondary hover:bg-muted text-secondary-foreground font-bold py-2 px-4 rounded-full transition-colors"
                             >
                                 Annulla

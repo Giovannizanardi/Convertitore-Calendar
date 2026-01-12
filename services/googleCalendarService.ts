@@ -118,6 +118,16 @@ export const handleSilentAuth = async (callback: (tokenResponse: any) => void) =
     tokenClient.requestAccessToken({prompt: ''});
 };
 
+// Cancella il token di autenticazione corrente
+export const clearAuthToken = () => {
+    if (window.gapi && window.gapi.client) {
+        window.gapi.client.setToken(null);
+    }
+    // Anche se non c'è un metodo GIS diretto per "logout" che esponga il revocare,
+    // impostando il token del client gapi a null, le chiamate successive richiederanno una nuova autorizzazione.
+    // L'utente può sempre cambiare account dal popup di Google durante la riautenticazione.
+};
+
 
 // List user's calendars
 export const listCalendars = async () => {
