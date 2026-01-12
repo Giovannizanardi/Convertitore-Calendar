@@ -2,15 +2,9 @@ import { GoogleGenAI, Type } from "@google/genai";
 import type { EventObject } from '../lib/types';
 import type { Part } from "@google/genai";
 
-// FIX: Extend ImportMeta to include Vite's environment variables.
-interface ImportMetaEnv {
-    readonly VITE_API_KEY: string;
-    // Add other environment variables here if needed
-}
-
-interface ImportMeta {
-    readonly env: ImportMetaEnv;
-}
+// FIX: Rimosse le dichiarazioni di interfaccia ImportMetaEnv e ImportMeta.
+// Queste dichiarazioni sono ridondanti in un progetto Vite con "types": ["vite/client"] in tsconfig.json.
+// TypeScript gestisce già correttamente la tipizzazione di `import.meta.env`.
 
 // The service will return a raw object without the `id` field.
 // It will be added in App.tsx after receiving the data.
@@ -24,7 +18,7 @@ export interface FilterParams {
 }
 
 const getAiClient = () => {
-    // FIX DEFINITIVO: Per un'applicazione Vite frontend, le variabili d'ambiente sono esposte tramite `import.meta.env`.
+    // Per un'applicazione Vite frontend, le variabili d'ambiente sono esposte tramite `import.meta.env`.
     // La direttiva `process.env.API_KEY` nelle linee guida è per ambienti Node.js.
     // L'uso di `import.meta.env.VITE_API_KEY` è necessario affinché l'applicazione funzioni correttamente.
     const apiKey = import.meta.env.VITE_API_KEY;
