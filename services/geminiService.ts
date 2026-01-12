@@ -2,6 +2,16 @@ import { GoogleGenAI, Type } from "@google/genai";
 import type { EventObject } from '../lib/types';
 import type { Part } from "@google/genai";
 
+// FIX: Extend ImportMeta to include Vite's environment variables.
+interface ImportMetaEnv {
+    readonly VITE_API_KEY: string;
+    // Add other environment variables here if needed
+}
+
+interface ImportMeta {
+    readonly env: ImportMetaEnv;
+}
+
 // The service will return a raw object without the `id` field.
 // It will be added in App.tsx after receiving the data.
 export type ApiEventObject = Omit<EventObject, 'id'>;
@@ -14,11 +24,13 @@ export interface FilterParams {
 }
 
 const getAiClient = () => {
-    // FIX: Use process.env.API_KEY as per the coding guidelines to resolve the 'import.meta.env' error.
-    const apiKey = process.env.API_KEY;
+    // FIX DEFINITIVO: Per un'applicazione Vite frontend, le variabili d'ambiente sono esposte tramite `import.meta.env`.
+    // La direttiva `process.env.API_KEY` nelle linee guida è per ambienti Node.js.
+    // L'uso di `import.meta.env.VITE_API_KEY` è necessario affinché l'applicazione funzioni correttamente.
+    const apiKey = import.meta.env.VITE_API_KEY;
     
     if (!apiKey) {
-        throw new Error("La variabile d'ambiente API_KEY non è impostata.");
+        throw new Error("La variabile d'ambiente VITE_API_KEY non è impostata. Per favore, assicurati che sia definita nel tuo file .env (es. VITE_API_KEY=LaTuaChiaveAPI).");
     }
 
     return new GoogleGenAI({ apiKey });
@@ -41,7 +53,7 @@ const eventSchema = {
 const getExtractionPrompt = (): string => {
   const currentYear = new Date().getFullYear();
   return `
-Sei un assistente intelligente per l'estrazione di dati. Il tuo compito è analizzare il contenuto fornito ed estrarre tutti gli eventi in un formato JSON strutturato conforme allo schema fornito.
+Sei un assistente intelligente per l'estrazione di dati. Il tuo compito è analizzare il contenuto fornito ed estrarrre tutti gli eventi in un formato JSON strutturato conforme allo schema fornito.
 
 Segui queste regole con precisione:
 1.  Il tuo output DEVE essere un array JSON valido di oggetti evento. Non includere altro testo, spiegazioni o formattazione markdown.
