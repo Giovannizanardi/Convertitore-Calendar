@@ -14,7 +14,7 @@ export interface FilterParams {
 }
 
 const getAiClient = () => {
-    // FIX: Use process.env.API_KEY as per the coding guidelines to resolve the 'import.meta.env' error.
+    // FIX: Changed API key retrieval to process.env.API_KEY as per coding guidelines.
     const apiKey = process.env.API_KEY;
     
     if (!apiKey) {
