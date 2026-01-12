@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import type { EventObject }T;
+import type { EventObject } from '../lib/types';
 import type { Part } from "@google/genai";
 
 // The service will return a raw object without the `id` field.
