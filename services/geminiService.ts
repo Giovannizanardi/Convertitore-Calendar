@@ -14,11 +14,11 @@ export interface FilterParams {
 }
 
 const getAiClient = () => {
-    // FIX: Use process.env.API_KEY as per the coding guidelines to resolve the 'import.meta.env' error.
-    const apiKey = import.meta.env.VITE_API_KEY;
+    // Adhere to coding guidelines: API key must be obtained from process.env.API_KEY.
+    const apiKey = process.env.API_KEY;
     
     if (!apiKey) {
-        throw new Error("La variabile d'ambiente API_KEY non è impostata.");
+        throw new Error("La variabile d'ambiente API_KEY non è impostata. Per favore, assicurati che sia definita nel tuo file .env (es. API_KEY=LaTuaChiaveAPI).");
     }
 
     return new GoogleGenAI({ apiKey });
@@ -41,7 +41,7 @@ const eventSchema = {
 const getExtractionPrompt = (): string => {
   const currentYear = new Date().getFullYear();
   return `
-Sei un assistente intelligente per l'estrazione di dati. Il tuo compito è analizzare il contenuto fornito ed estrarre tutti gli eventi in un formato JSON strutturato conforme allo schema fornito.
+Sei un assistente intelligente per l'estrazione di dati. Il tuo compito è analizzare il contenuto fornito ed estrarrre tutti gli eventi in un formato JSON strutturato conforme allo schema fornito.
 
 Segui queste regole con precisione:
 1.  Il tuo output DEVE essere un array JSON valido di oggetti evento. Non includere altro testo, spiegazioni o formattazione markdown.

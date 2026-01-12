@@ -106,16 +106,23 @@ const initGisClient = (callback: (tokenResponse: any) => void): Promise<void> =>
     });
 };
 
-// Gestisce l'autenticazione dell'utente tramite il clic del pulsante
-export const handleAuthClick = async (callback: (tokenResponse: any) => void) => {
+/**
+ * Gestisce l'autenticazione dell'utente tramite il clic del pulsante.
+ * @param callback La funzione di callback da eseguire con la risposta del token.
+ * @param promptType Il tipo di prompt da mostrare all'utente. Può essere 'consent', 'select_account' o vuoto.
+ */
+export const handleAuthClick = async (callback: (tokenResponse: any) => void, promptType: 'consent' | 'select_account' | '' = 'consent') => {
     await initGisClient(callback);
-    tokenClient.requestAccessToken({prompt: 'consent'});
+    tokenClient.requestAccessToken({prompt: promptType});
 };
 
-// Tenta di autenticare l'utente silenziosamente
+/**
+ * Tenta di autenticare l'utente silenziosamente.
+ * Questo è un wrapper per handleAuthClick con promptType vuoto.
+ * @param callback La funzione di callback da eseguire con la risposta del token.
+ */
 export const handleSilentAuth = async (callback: (tokenResponse: any) => void) => {
-    await initGisClient(callback);
-    tokenClient.requestAccessToken({prompt: ''});
+    await handleAuthClick(callback, ''); // Usa il prompt vuoto per il login silenzioso
 };
 
 
