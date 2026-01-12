@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { ThemeCustomizer } from './components/ThemeCustomizer';
-import metadata from './metadata.json';
+// FIX: Import metadata.json as a raw string to bypass module resolution issues for JSON files.
+// The content will be parsed manually in useEffect.
+import rawMetadata from './metadata.json?raw'; 
 import { Dashboard } from './components/Dashboard';
 import { ImportView } from './components/ImportView';
 import { CleanupView } from './components/CleanupView';
@@ -16,8 +18,16 @@ export default function App() {
   const [appDescription, setAppDescription] = useState<string>('');
 
   useEffect(() => {
-    setAppName(metadata.name || 'ForMa Calendar Suite');
-    setAppDescription(metadata.description || 'Una suite intelligente per importare e pulire i tuoi calendari.');
+    try {
+      // FIX: Manually parse the raw JSON string content.
+      const metadata = JSON.parse(rawMetadata);
+      setAppName(metadata.name || 'ForMa Calendar Suite');
+      setAppDescription(metadata.description || 'Una suite intelligente per importare e pulire i tuoi calendari.');
+    } catch (e) {
+      console.error("Failed to parse metadata.json, using default values.", e);
+      setAppName('ForMa - Calendar Suite');
+      setAppDescription('Una suite intelligente basata su IA per popolare e pulire i tuoi calendari. Importa eventi in blocco da file e testo, o trova e rimuovi rapidamente eventi superflui con il nostro assistente.');
+    }
   }, []);
 
   const renderPage = () => {
