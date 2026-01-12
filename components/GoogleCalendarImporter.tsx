@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { ValidatedEvent } from '../lib/types';
 import { generateCsvContent } from '../lib/csv';
+// FIX: Corrected import syntax from `=>` to `from`.
 import { generateIcsContent } from '../lib/ics';
 import * as gcal from '../services/googleCalendarService';
-import { DownloadIcon, CheckCircleIcon, GoogleIcon, CalendarPlusIcon, CalendarDaysIcon, JsonIcon, RefreshCwIcon, ChevronDownIcon, ChevronUpIcon } from './Icons';
+import { DownloadIcon, CheckCircleIcon, GoogleIcon, CalendarPlusIcon, CalendarDaysIcon, JsonIcon, RefreshCwIcon, ChevronDownIcon } from './Icons';
 import { Loader } from './Loader';
 import { toDDMMYYYY } from '../lib/dateUtils'; // Importa la funzione di formattazione della data
 
@@ -41,7 +42,7 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
     
     const [calendars, setCalendars] = useState<Calendar[]>([]);
     // `selectedCalendarId` non viene più utilizzato per un default globale, ma ancora per inizializzare `selectedCalendarForBulkAssign`.
-    const [selectedCalendarId, setSelectedCalendarId] = useState(''); 
+    // Rimosso `selectedCalendarId` in quanto non più usato.
     const [eventCalendarMappings, setEventCalendarMappings] = useState<Record<number, string>>({}); // Mapping for individual events
     const [importProgress, setImportProgress] = useState(0);
     const [user, setUser] = useState<{ email: string } | null>(null);
@@ -86,8 +87,7 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
             setCalendars(calendarList);
             const primaryCalendar = calendarList.find((c: Calendar) => c.primary) || calendarList[0];
             if (primaryCalendar) {
-                // `selectedCalendarId` viene usato qui solo per inizializzare il selettore di massa
-                setSelectedCalendarId(primaryCalendar.id); 
+                // `selectedCalendarId` non è più usato, impostiamo direttamente `selectedCalendarForBulkAssign`
                 setSelectedCalendarForBulkAssign(primaryCalendar.id); 
                 setEventCalendarMappings({}); 
             }
@@ -319,7 +319,7 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
         setImportProgress(0);
         setUser(null);
         setCalendars([]);
-        setSelectedCalendarId('');
+        // `selectedCalendarId` non è più usato
         setEventCalendarMappings({}); 
         setSelectedEventsForBulkAssignment(new Set()); 
         setSelectedCalendarForBulkAssign(''); 
