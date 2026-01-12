@@ -40,10 +40,16 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
     
     const [calendars, setCalendars] = useState<Calendar[]>([]);
     const [selectedCalendarId, setSelectedCalendarId] = useState(''); // Default calendar for all events
+    // FIX: eventCalendarMappings ora contiene solo le assegnazioni esplicite/sovrascritte.
     const [eventCalendarMappings, setEventCalendarMappings] = useState<Record<number, string>>({}); // Mapping for individual events
     const [importProgress, setImportProgress] = useState(0);
     const [user, setUser] = useState<{ email: string } | null>(null);
     const [importResult, setImportResult] = useState<ImportResult | null>(null);
+
+    // FIX: Nuovi stati per la selezione multipla e l'assegnazione in blocco
+    const [selectedEventsForBulkAssignment, setSelectedEventsForBulkAssignment] = useState<Set<number>>(new Set());
+    const [selectedCalendarForBulkAssign, setSelectedCalendarForBulkAssign] = useState('');
+
 
     const handleGapiLoad = useCallback(async () => {
         try {
@@ -80,12 +86,10 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
             const primaryCalendar = calendarList.find((c: Calendar) => c.primary) || calendarList[0];
             if (primaryCalendar) {
                 setSelectedCalendarId(primaryCalendar.id);
-                // Initialize all events to the primary calendar by default
-                const initialMappings: Record<number, string> = {};
-                events.forEach(event => {
-                    initialMappings[event.id] = primaryCalendar.id;
-                });
-                setEventCalendarMappings(initialMappings);
+                setSelectedCalendarForBulkAssign(primaryCalendar.id); // FIX: Inizializza anche il selettore di massa
+                // FIX: eventCalendarMappings non viene più precompilato qui.
+                // Contiene solo gli override specifici dell'utente.
+                setEventCalendarMappings({}); 
             }
         } catch (error: any) {
             console.error('Error fetching calendars:', error);
@@ -95,7 +99,7 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
                 message: `Non è stato possibile recuperare i tuoi calendari da Google. ${error.message}. Prova ad accedere di nuovo.`
             });
         }
-    }, [events]); // Re-run if events change to initialize mappings
+    }, []); // Non dipende da events qui, sarà popolato dopo l'autenticazione
 
     const handleTokenResponse = useCallback(async (tokenResponse: any, isSilent: boolean) => {
         // Clear any previous error message when a new token response is received
@@ -248,18 +252,56 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
         setEventCalendarMappings(prev => ({ ...prev, [eventId]: calendarId }));
     };
 
+    // FIX: Logica aggiornata per applicare il calendario predefinito solo agli eventi NON assegnati.
     const handleApplyDefaultToUnmapped = () => {
         if (!selectedCalendarId) return;
 
         setEventCalendarMappings(prev => {
             const newMappings = { ...prev };
             events.forEach(event => {
+                // Se l'evento non ha una mappatura esplicita, applica il default
                 if (!newMappings[event.id]) {
                     newMappings[event.id] = selectedCalendarId;
                 }
             });
             return newMappings;
         });
+    };
+
+    // FIX: Gestione della selezione individuale dei checkbox
+    const handleToggleEventForBulkAssignment = (eventId: number) => {
+        setSelectedEventsForBulkAssignment(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(eventId)) {
+                newSet.delete(eventId);
+            } else {
+                newSet.add(eventId);
+            }
+            return newSet;
+        });
+    };
+
+    // FIX: Gestione del checkbox "Seleziona Tutto"
+    const handleSelectAllEventsForBulkAssignment = () => {
+        if (selectedEventsForBulkAssignment.size === events.length) {
+            setSelectedEventsForBulkAssignment(new Set());
+        } else {
+            setSelectedEventsForBulkAssignment(new Set(events.map(e => e.id)));
+        }
+    };
+
+    // FIX: Funzione per applicare l'assegnazione in blocco
+    const handleApplyBulkAssignment = () => {
+        if (!selectedCalendarForBulkAssign || selectedEventsForBulkAssignment.size === 0) return;
+
+        setEventCalendarMappings(prev => {
+            const newMappings = { ...prev };
+            selectedEventsForBulkAssignment.forEach(eventId => {
+                newMappings[eventId] = selectedCalendarForBulkAssign;
+            });
+            return newMappings;
+        });
+        setSelectedEventsForBulkAssignment(new Set()); // Cancella la selezione dopo l'applicazione
     };
     
     const handleImport = async () => {
@@ -309,6 +351,8 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
         setCalendars([]);
         setSelectedCalendarId('');
         setEventCalendarMappings({}); // Reset mappings
+        setSelectedEventsForBulkAssignment(new Set()); // FIX: Reset selezione di massa
+        setSelectedCalendarForBulkAssign(''); // FIX: Reset selettore di massa
         if (goToChoice) {
             setView('choice');
         }
@@ -322,7 +366,11 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
     };
 
     // Determine if the import button should be disabled
-    const isImportButtonDisabled = events.length === 0 || (!selectedCalendarId && Object.keys(eventCalendarMappings).length === 0);
+    // FIX: Rivedi la logica per disabilitare il pulsante di importazione.
+    // Se ci sono eventi, e c'è un calendario predefinito o *almeno un evento ha una mappatura specifica*,
+    // e tutti gli eventi con mappature specifiche hanno un calendario valido, allora abilita.
+    const isImportButtonDisabled = events.length === 0 || 
+        (events.length > 0 && !selectedCalendarId && Object.values(eventCalendarMappings).length === 0);
 
     const CsvView = () => (
         <div className="animate-fade-in text-center">
@@ -422,6 +470,7 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
                                 value={selectedCalendarId}
                                 onChange={(e) => handleDefaultCalendarChange(e.target.value)}
                                 className="bg-input border border-border text-foreground text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
+                                aria-label="Seleziona calendario predefinito"
                              >
                                 {calendars.map(cal => (
                                     <option key={cal.id} value={cal.id}>{cal.summary}</option>
@@ -431,6 +480,7 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
                                 onClick={handleApplyDefaultToUnmapped}
                                 className="mt-3 w-full bg-secondary hover:bg-muted text-secondary-foreground font-semibold py-2 px-3 rounded-md transition-colors text-sm"
                                 disabled={!selectedCalendarId}
+                                aria-label="Applica calendario predefinito agli eventi non assegnati"
                             >
                                 Applica calendario predefinito a tutti gli eventi non assegnati
                             </button>
@@ -440,10 +490,65 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
                         {events.length > 0 && (
                             <div className="bg-card/50 p-6 rounded-lg border border-border mb-6 max-h-96 overflow-y-auto">
                                 <h4 className="text-lg font-bold text-foreground mb-4">Assegna Calendari per Evento ({events.length} totali)</h4>
-                                <div className="space-y-4">
+                                
+                                {/* FIX: Controlli per l'assegnazione in blocco */}
+                                <div className="flex flex-wrap items-end gap-2 mb-4 bg-secondary/30 p-3 rounded-md">
+                                    <div className="flex-grow">
+                                        <label htmlFor="bulk-calendar-select" className="block mb-1 text-sm font-medium text-muted-foreground">Assegna ai selezionati:</label>
+                                        <select
+                                            id="bulk-calendar-select"
+                                            value={selectedCalendarForBulkAssign}
+                                            onChange={(e) => setSelectedCalendarForBulkAssign(e.target.value)}
+                                            className="bg-input border border-border text-foreground text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
+                                            aria-label="Seleziona calendario per assegnazione in blocco"
+                                        >
+                                            {calendars.map(cal => (
+                                                <option key={`bulk-${cal.id}`} value={cal.id}>{cal.summary}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <button
+                                        onClick={handleApplyBulkAssignment}
+                                        disabled={!selectedCalendarForBulkAssign || selectedEventsForBulkAssignment.size === 0}
+                                        className="bg-primary hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground text-primary-foreground font-bold py-2.5 px-4 rounded-md transition-colors flex-shrink-0"
+                                        aria-label="Applica calendario selezionato agli eventi"
+                                    >
+                                        Applica ai {selectedEventsForBulkAssignment.size} Selezionati
+                                    </button>
+                                </div>
+
+
+                                <div className="space-y-2">
+                                    {/* FIX: Header con checkbox "Seleziona Tutto" */}
+                                    <div className="flex items-center justify-between p-3 bg-secondary/50 rounded-md text-sm font-semibold text-foreground">
+                                        <label className="flex items-center space-x-3">
+                                            <input 
+                                                type="checkbox"
+                                                className="w-4 h-4 text-primary bg-secondary border-border rounded focus:ring-ring"
+                                                checked={selectedEventsForBulkAssignment.size === events.length && events.length > 0}
+                                                onChange={handleSelectAllEventsForBulkAssignment}
+                                                aria-label="Seleziona tutti gli eventi per assegnazione calendario"
+                                            />
+                                            <span>Evento</span>
+                                        </label>
+                                        <span className="w-1/2 text-right sm:text-left">Calendario Assegnato</span>
+                                    </div>
+
                                     {events.map(event => (
                                         <div key={event.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 bg-secondary/30 rounded-md">
-                                            <p className="font-semibold text-foreground flex-grow pr-4 mb-2 sm:mb-0 text-ellipsis overflow-hidden whitespace-nowrap">{event.subject}</p>
+                                            {/* FIX: Checkbox individuale */}
+                                            <label htmlFor={`select-event-${event.id}`} className="flex items-center space-x-3 flex-grow pr-4 mb-2 sm:mb-0">
+                                                <input
+                                                    type="checkbox"
+                                                    id={`select-event-${event.id}`}
+                                                    className="w-4 h-4 text-primary bg-secondary border-border rounded focus:ring-ring"
+                                                    checked={selectedEventsForBulkAssignment.has(event.id)}
+                                                    onChange={() => handleToggleEventForBulkAssignment(event.id)}
+                                                    aria-label={`Seleziona l'evento ${event.subject} per l'assegnazione`}
+                                                />
+                                                <span className="font-semibold text-foreground text-ellipsis overflow-hidden whitespace-nowrap">{event.subject}</span>
+                                            </label>
+                                            
                                             <div className="w-full sm:w-1/2">
                                                 <label htmlFor={`event-cal-select-${event.id}`} className="sr-only">Calendario per {event.subject}</label>
                                                 <select
@@ -452,6 +557,7 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
                                                     value={eventCalendarMappings[event.id] || selectedCalendarId} 
                                                     onChange={(e) => handleEventCalendarChange(event.id, e.target.value)}
                                                     className="bg-input border border-border text-foreground text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
+                                                    aria-label={`Assegna calendario per l'evento ${event.subject}`}
                                                 >
                                                     {calendars.map(cal => (
                                                         <option key={cal.id} value={cal.id}>{cal.summary}</option>
@@ -470,12 +576,14 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
                                 onClick={handleImport}
                                 className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-8 rounded-full shadow-lg shadow-primary/20 transform hover:scale-105 transition-all duration-300"
                                 disabled={isImportButtonDisabled}
+                                aria-label={`Importa ${events.length} eventi`}
                             >
                                 Importa {events.length} Eventi
                             </button>
                              <button
                                 onClick={() => resetGCalState(true)}
                                 className="bg-secondary hover:bg-muted text-secondary-foreground font-bold py-2 px-4 rounded-full transition-colors"
+                                aria-label="Annulla l'importazione e torna alla scelta"
                             >
                                 Annulla
                             </button>
