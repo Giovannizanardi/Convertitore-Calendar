@@ -5,7 +5,7 @@ import { Loader } from './Loader';
 import { extractEvents, ApiEventObject } from '../services/geminiService';
 import { EventPreviewTable } from './EventPreviewTable';
 import { validateEvents } from '../lib/validation';
-import type { ValidatedEvent } from '../lib/types';
+import type { ValidatedEvent, EventObject } from '../lib/types'; // Import EventObject
 import { GoogleCalendarImporter } from './GoogleCalendarImporter';
 import { toDDMMYYYY } from '../lib/dateUtils';
 import { ArrowLeftIcon, RefreshCwIcon } from './Icons';
@@ -151,11 +151,16 @@ export const ImportView: React.FC<ImportViewProps> = ({ setPage }) => {
             extractedEvents = await extractEvents(pastedText);
         }
       
-      const eventsWithId = extractedEvents.map((event, index) => ({
-         ...event,
+      // FIX: Explicitly assign all properties to create a complete EventObject.
+      const eventsWithId: EventObject[] = extractedEvents.map((event, index) => ({
          id: index,
+         subject: event.subject,
          startDate: toDDMMYYYY(event.startDate),
+         startTime: event.startTime,
          endDate: toDDMMYYYY(event.endDate),
+         endTime: event.endTime,
+         description: event.description,
+         location: event.location,
       }));
       setEvents(validateEvents(eventsWithId));
       setSelectedEvents(new Set());

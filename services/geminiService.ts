@@ -1,10 +1,11 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import type { EventObject, ValidatedEvent } from '../lib/types';
 import type { Part } from "@google/genai";
+// FIX: Import EventObject from lib/types.ts
+import type { EventObject } from "../lib/types";
 
 // The service will return a raw object without the `id` field.
 // It will be added in App.tsx after receiving the data.
-export type ApiEventObject = Omit<EventObject, 'id'>;
+export type ApiEventObject = Omit<EventObject, 'id'>; // EventObject è in lib/types.ts
 
 export interface FilterParams {
     startDate: string;
@@ -14,12 +15,13 @@ export interface FilterParams {
 }
 
 const getAiClient = () => {
-    // FIX: Allineato all'uso di `process.env.API_KEY` come specificato nelle linee guida di `@google/genai`.
-    // Si assume che `process.env.API_KEY` sia reso disponibile e accessibile nell'ambiente di esecuzione.
-    const apiKey = process.env.API_KEY;
+    // FIX: Allineato all'uso di `import.meta.env.VITE_API_KEY` per ambienti Vite frontend.
+    // Le linee guida `@google/genai` relative a `process.env.API_KEY` sono primariamente per ambienti Node.js.
+    // In un'app Vite, `import.meta.env` è il meccanismo corretto per le variabili d'ambiente.
+    const apiKey = import.meta.env.VITE_API_KEY;
     
     if (!apiKey) {
-        throw new Error("La variabile d'ambiente API_KEY non è impostata. Per favor, assicurati che sia definita nel tuo ambiente.");
+        throw new Error("La variabile d'ambiente VITE_API_KEY non è impostata. Assicurati che sia definita nel tuo file .env (es. VITE_API_KEY=LaTuaChiaveAPI).");
     }
 
     return new GoogleGenAI({ apiKey });
@@ -59,7 +61,7 @@ Contenuto da analizzare:
 `;
 };
 
-// FIX: Helper function to convert a File to a base64 encoded string.
+// Helper function to convert a File to a base64 encoded string.
 async function fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -69,16 +71,16 @@ async function fileToBase64(file: File): Promise<string> {
     });
 }
 
-// FIX: Aggiunta la funzione `extractEvents` per estrarre eventi da testo o file utilizzando l'API Gemini.
+// Aggiunta la funzione `extractEvents` per estrarre eventi da testo o file utilizzando l'API Gemini.
 // La funzione gestisce l'input di testo e immagini, strutturando la richiesta per l'estrazione JSON.
 export async function extractEvents(input: string | File): Promise<ApiEventObject[]> {
     const ai = getAiClient();
     const extractionPrompt = getExtractionPrompt();
-    let contents: (string | Part)[] = [];
+    let contents: Part[] = []; // Deve essere sempre un array di Part
     let modelName = 'gemini-3-flash-preview'; // Default for text tasks
 
     if (typeof input === 'string') {
-        contents = [{text: extractionPrompt + input}];
+        contents = [{ text: extractionPrompt + input }];
     } else { // File input
         const mimeType = input.type;
         const base64Data = (await fileToBase64(input)).split(',')[1]; // Remove data:mime/type;base64, prefix
@@ -86,7 +88,7 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
         if (mimeType.startsWith('image/')) {
             modelName = 'gemini-2.5-flash-image'; // Use image model for image inputs
             contents = [
-                {text: extractionPrompt}, // Send the prompt as text
+                { text: extractionPrompt }, // Send the prompt as text part
                 {
                     inlineData: {
                         mimeType: mimeType,
@@ -95,9 +97,9 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
                 },
             ];
         } else if (mimeType === 'text/plain' || mimeType === 'application/pdf' || mimeType.includes('officedocument')) {
-            // For text-based files, read content and send as text
+            // For text-based files, read content and send as text part
             const textContent = await input.text();
-            contents = [{text: extractionPrompt + textContent}];
+            contents = [{ text: extractionPrompt + textContent }];
         } else {
             throw new Error(`Tipo di file non supportato per l'estrazione: ${mimeType}`);
         }
@@ -137,7 +139,7 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
     }
 }
 
-// FIX: Aggiunta la funzione `suggestCorrection` per suggerire correzioni a un campo specifico di un evento utilizzando l'API Gemini.
+// Aggiunta la funzione `suggestCorrection` per suggerire correzioni a un campo specifico di un evento utilizzando l'API Gemini.
 // La funzione invia un prompt all'IA per ottenere un valore corretto per il campo invalidato.
 export async function suggestCorrection(event: EventObject, field: keyof Omit<EventObject, 'id'>): Promise<string | undefined> {
     const ai = getAiClient();
@@ -151,7 +153,10 @@ Ora Fine: ${event.endTime}
 Luogo: ${event.location}
 Descrizione: ${event.description}
 
-Il campo "${field}" è invalido o formattato in modo errato. Il valore corrente è: "${event[field]}".
+Il campo "${field}" è invalido o formattato in modo errato. Il valore corrente è: "${
+    // FIX: Explicitly convert field to string when accessing event properties to avoid implicit conversion errors.
+    event[String(field) as keyof EventObject]
+}".
 Per favore, suggerisci un valore corretto per il campo "${field}" basandoti sul contesto dell'evento.
 Normalizza le date al formato AAAA-MM-GG e gli orari al formato HH:mm.
 Rispondi SOLO con il valore corretto per il campo, senza spiegazioni o testo aggiuntivo.`;
@@ -177,7 +182,7 @@ Rispondi SOLO con il valore corretto per il campo, senza spiegazioni o testo agg
     }
 }
 
-// FIX: Aggiunta la funzione `parseFilterFromQuery` per estrarre i parametri di filtro da una query testuale.
+// Aggiunta la funzione `parseFilterFromQuery` per estrarre i parametri di filtro da una query testuale.
 // Utilizza l'IA per interpretare una query in linguaggio naturale e convertirla in un oggetto `FilterParams`.
 export async function parseFilterFromQuery(query: string): Promise<FilterParams> {
     const ai = getAiClient();
@@ -198,7 +203,8 @@ Query: "${query}"`;
             location: { type: Type.STRING, description: 'Luogo dell\'evento da filtrare. Stringa vuota se non specificata.' },
         },
         required: [], // All fields are optional from the query perspective
-        propertyOrdering: ['startDate', 'endDate', 'text', 'location']
+        // FIX: Ensure propertyOrdering is correctly typed as string[]
+        propertyOrdering: ['startDate', 'endDate', 'text', 'location'] as string[]
     };
 
     try {
