@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import type { Part } from "@google/genai";
+import type { Part, GenerateContentParameters } from "@google/genai";
 // FIX: Import EventObject from lib/types.ts
 import type { EventObject } from "../lib/types";
 
@@ -15,13 +15,12 @@ export interface FilterParams {
 }
 
 const getAiClient = () => {
-    // FIX: Allineato all'uso di `import.meta.env.VITE_API_KEY` per ambienti Vite frontend.
-    // Le linee guida `@google/genai` relative a `process.env.API_KEY` sono primariamente per ambienti Node.js.
-    // In un'app Vite, `import.meta.env` è il meccanismo corretto per le variabili d'ambiente.
-    const apiKey = import.meta.env.VITE_API_KEY;
+    // FIX: Allineato alle linee guida `@google/genai` che richiedono l'uso di `process.env.API_KEY`.
+    // Questa variabile d'ambiente deve essere pre-configurata e accessibile nell'ambiente di esecuzione.
+    const apiKey = process.env.API_KEY;
     
     if (!apiKey) {
-        throw new Error("La variabile d'ambiente VITE_API_KEY non è impostata. Assicurati che sia definita nel tuo file .env (es. VITE_API_KEY=LaTuaChiaveAPI).");
+        throw new Error("La variabile d'ambiente API_KEY non è impostata. Assicurati che sia definita nel tuo ambiente.");
     }
 
     return new GoogleGenAI({ apiKey });
@@ -78,6 +77,14 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
     const extractionPrompt = getExtractionPrompt();
     let contents: Part[] = []; // Deve essere sempre un array di Part
     let modelName = 'gemini-3-flash-preview'; // Default for text tasks
+    // Default config for text models
+    let config: GenerateContentParameters['config'] = {
+        responseMimeType: "application/json",
+        responseSchema: {
+            type: Type.ARRAY,
+            items: eventSchema
+        },
+    };
 
     if (typeof input === 'string') {
         contents = [{ text: extractionPrompt + input }];
@@ -96,6 +103,9 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
                     },
                 },
             ];
+            // CRITICAL: Remove responseMimeType and responseSchema for image models as per guidelines.
+            // The model will still be instructed to output JSON via the prompt.
+            config = {}; 
         } else if (mimeType === 'text/plain' || mimeType === 'application/pdf' || mimeType.includes('officedocument')) {
             // For text-based files, read content and send as text part
             const textContent = await input.text();
@@ -109,18 +119,68 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
         const response = await ai.models.generateContent({
             model: modelName,
             contents: { parts: contents }, // Wrap contents in a 'parts' object for multiple parts
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: eventSchema
-                },
-            },
+            config: config, // Use the conditionally defined config
         });
 
-        const jsonStr = response.text?.trim();
+        let jsonStr = response.text?.trim();
         if (!jsonStr) {
             throw new Error("La risposta dell'IA non contiene dati JSON validi.");
+        }
+        
+        // If responseMimeType was not enforced (e.g., for image models), the output might
+        // be wrapped in markdown or contain additional conversational text.
+        // Attempt to extract the pure JSON string.
+        if (modelName === 'gemini-2.5-flash-image' || !config.responseMimeType) {
+            // First, try to find JSON within a markdown code block
+            const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/);
+            if (jsonMatch && jsonMatch[1]) {
+                jsonStr = jsonMatch[1];
+            } else {
+                // If no markdown code block, try to find the first array/object and extract.
+                const firstBracket = jsonStr.indexOf('[');
+                const firstCurly = jsonStr.indexOf('{');
+                
+                let startIndex = -1;
+                if (firstBracket !== -1 && (firstCurly === -1 || firstBracket < firstCurly)) {
+                    startIndex = firstBracket;
+                } else if (firstCurly !== -1) {
+                    startIndex = firstCurly;
+                }
+
+                if (startIndex !== -1) {
+                    let endIndex = -1;
+                    let balance = 0;
+                    const opener = jsonStr[startIndex];
+                    const closer = opener === '[' ? ']' : '}';
+
+                    for (let i = startIndex; i < jsonStr.length; i++) {
+                        const char = jsonStr[i];
+                        if (char === '"' && (i === 0 || jsonStr[i-1] !== '\\')) { // Handle quotes for skipping inner content
+                            let j = i + 1;
+                            while(j < jsonStr.length && (jsonStr[j] !== '"' || jsonStr[j-1] === '\\')) {
+                                j++;
+                            }
+                            i = j; // Skip to after the closing quote
+                        } else if (char === opener) {
+                            balance++;
+                        } else if (char === closer) {
+                            balance--;
+                        }
+                        if (balance === 0 && char === closer) {
+                            endIndex = i;
+                            break;
+                        }
+                    }
+                    
+                    if (endIndex !== -1) {
+                        jsonStr = jsonStr.substring(startIndex, endIndex + 1);
+                    } else {
+                        // Fallback: If no balanced structure found, assume the model outputted plain JSON
+                        // without extra wrapping, or issue a warning.
+                        console.warn("Could not find a balanced JSON structure after prompt instruction, attempting direct parse.");
+                    }
+                }
+            }
         }
         
         // Ensure the response is an array
