@@ -12,13 +12,15 @@ export interface FilterParams {
 }
 
 const getAiClient = () => {
-    // FIX: Allineato alle linee guida `@google/genai` che richiedono l'uso di `process.env.API_KEY`.
-    // Questa variabile d'ambiente deve essere disponibile nell'ambiente di esecuzione (ad esempio, tramite un loader di variabili d'ambiente).
-    const apiKey = process.env.API_KEY;
+    // FIX: Adherence to coding guidelines: The API key must be obtained exclusively from `process.env.API_KEY`.
+    // Type assertion is used here to inform TypeScript that `process.env` will be available at runtime
+    // and will contain the `API_KEY` property, as this is typically handled by the build environment (e.g., Vite configuration)
+    // but not always explicitly typed in the frontend context without additional configuration files (which are disallowed by constraints).
+    const apiKey = (process.env as any).API_KEY;
     
     if (!apiKey) {
-        // FIX: Aggiornato il messaggio di errore per riflettere il nome della variabile d'ambiente API_KEY.
-        throw new Error("La variabile d'ambiente API_KEY non è impostata. Assicurati che sia definita nel tuo ambiente.");
+        // FIX: Aggiornato il messaggio di errore per riflettere il nome corretto della variabile d'ambiente (`API_KEY`).
+        throw new Error("La variabile d'ambiente API_KEY non è impostata. Assicurati che sia definita nel tuo file .env (es. API_KEY=LaTuaChiaveAPI).");
     }
 
     return new GoogleGenAI({ apiKey });
