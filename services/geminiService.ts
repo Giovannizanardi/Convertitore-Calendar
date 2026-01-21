@@ -12,12 +12,13 @@ export interface FilterParams {
 }
 
 const getAiClient = () => {
-    // FIX: Changed from import.meta.env.VITE_API_KEY to process.env.API_KEY as per coding guidelines.
+    // FIX: Allineato alle linee guida `@google/genai` che richiedono l'uso di `process.env.API_KEY`.
+    // Questa variabile d'ambiente deve essere disponibile nell'ambiente di esecuzione (ad esempio, tramite un loader di variabili d'ambiente).
     const apiKey = process.env.API_KEY;
     
     if (!apiKey) {
-        // FIX: Updated error message to reflect the new environment variable name.
-        throw new Error("La variabile d'ambiente API_KEY non è impostata. Assicurati che sia definita nel tuo file .env (es. API_KEY=LaTuaChiaveAPI).");
+        // FIX: Aggiornato il messaggio di errore per riflettere il nome della variabile d'ambiente API_KEY.
+        throw new Error("La variabile d'ambiente API_KEY non è impostata. Assicurati che sia definita nel tuo ambiente.");
     }
 
     return new GoogleGenAI({ apiKey });
@@ -43,7 +44,7 @@ const getExtractionPrompt = (): string => {
 Sei un assistente intelligente per l'estrazione di dati. Il tuo compito è analizzare il contenuto fornito ed estrarrre tutti gli eventi in un formato JSON strutturato conforme allo schema fornito.
 
 Segui queste regole con precisione:
-1.  Il tuo output DEVE essere un array JSON valido di oggetti evento. Non includere altro testo, spiegazioni o formattazione markdown.
+1.  Il tuo output DEVE essere un array JSON valido di oggetti evento. Non includi altre informazioni o testo.
 2.  Estrai i seguenti campi per ogni evento: subject, startDate, startTime, endDate, endTime, description, location.
 3.  Sii molto flessibile con i formati di data e ora di input (es. GG/MM/AAAA, MM-GG-AAAA, AAAA.MM.GG, Mese GG, AAAA, 2pm, 14:00).
 4.  Quando fornisci le date, normalizzale rigorosamente nel formato AAAA-MM-GG. Se l'anno non è specificato, assumi l'anno corrente (${currentYear}).
