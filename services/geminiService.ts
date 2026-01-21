@@ -1,3 +1,5 @@
+declare var process: any; // Dichiarazione per informare TypeScript che 'process' esisterà a runtime.
+
 import { GoogleGenAI, Type } from "@google/genai";
 import type { Part, GenerateContentParameters } from "@google/genai";
 import type { EventObject } from "../lib/types";
