@@ -12,12 +12,12 @@ export interface FilterParams {
 }
 
 const getAiClient = () => {
-    // FIX: Allineato alle linee guida di @google/genai: L'API key deve essere ottenuta esclusivamente da process.env.API_KEY.
-    // Si assume che process.env.API_KEY sia pre-configurato, valido e accessibile.
+    // FIX: Allineato alle linee guida `@google/genai` che specificano l'uso esclusivo di `process.env.API_KEY`.
+    // Questa modifica è conforme alla direttiva che `process.env.API_KEY` sarà pre-configurato e accessibile.
     const apiKey = process.env.API_KEY;
     
     if (!apiKey) {
-        throw new Error("La variabile d'ambiente API_KEY non è impostata. Assicurati che sia definita nel tuo ambiente.");
+        throw new Error("La variabile d'ambiente API_KEY non è impostata. Assicurati che sia definita nel tuo ambiente di esecuzione.");
     }
 
     return new GoogleGenAI({ apiKey });
@@ -43,7 +43,7 @@ const getExtractionPrompt = (): string => {
 Sei un assistente intelligente per l'estrazione di dati. Il tuo compito è analizzare il contenuto fornito ed estrarrre tutti gli eventi in un formato JSON strutturato conforme allo schema fornito.
 
 Segui queste regole con precisione:
-1.  Il tuo output DEVE essere un array JSON valido di oggetti evento. Non includi altre informazioni o testo.
+1.  Il tuo output DEVE essere un array JSON valido di oggetti evento. Non includere altro testo, spiegazioni o formattazione markdown.
 2.  Estrai i seguenti campi per ogni evento: subject, startDate, startTime, endDate, endTime, description, location.
 3.  Sii molto flessibile con i formati di data e ora di input (es. GG/MM/AAAA, MM-GG-AAAA, AAAA.MM.GG, Mese GG, AAAA, 2pm, 14:00).
 4.  Quando fornisci le date, normalizzale rigorosamente nel formato AAAA-MM-GG. Se l'anno non è specificato, assumi l'anno corrente (${currentYear}).
@@ -57,6 +57,7 @@ Contenuto da analizzare:
 `;
 };
 
+// Helper function to convert a File to a base64 encoded string.
 async function fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -66,11 +67,14 @@ async function fileToBase64(file: File): Promise<string> {
     });
 }
 
+// Aggiunta la funzione `extractEvents` per estrarre eventi da testo o file utilizzando l'API Gemini.
+// La funzione gestisce l'input di testo e immagini, strutturando la richiesta per l'estrazione JSON.
 export async function extractEvents(input: string | File): Promise<ApiEventObject[]> {
     const ai = getAiClient();
     const extractionPrompt = getExtractionPrompt();
-    let contents: Part[] = [];
+    let contents: Part[] = []; // Deve essere sempre un array di Part
     let modelName = 'gemini-3-flash-preview'; // Default for text tasks
+    // Default config for text models
     let config: GenerateContentParameters['config'] = {
         responseMimeType: "application/json",
         responseSchema: {
@@ -83,10 +87,10 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
         contents = [{ text: extractionPrompt + input }];
     } else { // File input
         const mimeType = input.type;
-        const base64Data = (await fileToBase64(input)).split(',')[1];
+        const base64Data = (await fileToBase64(input)).split(',')[1]; // Remove data:mime/type;base64, prefix
 
         // MIME types che dovrebbero essere trattati come input multimodali (visivi)
-        const multiModalMimeTypes = [
+        const documentAndImageMimeTypes = [
             'image/png', 'image/jpeg', 'image/gif', 'image/webp', // Immagini
             'application/pdf', // Documenti PDF
             'application/msword', // .doc (Word 97-2003)
@@ -98,27 +102,34 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
         ];
 
         // Se il tipo MIME del file di input è considerato multimodale
-        if (multiModalMimeTypes.some(type => mimeType.includes(type))) {
+        if (documentAndImageMimeTypes.some(type => mimeType.includes(type))) {
             modelName = 'gemini-2.5-flash-image'; // Usa il modello per immagini/multimodale
             contents = [
-                { text: extractionPrompt },
-                { inlineData: { mimeType: mimeType, data: base64Data } },
+                { text: extractionPrompt }, // Invia il prompt come parte di testo
+                {
+                    inlineData: {
+                        mimeType: mimeType,
+                        data: base64Data,
+                    },
+                },
             ];
-            config = {}; // CRITICAL: Rimuovi responseMimeType e responseSchema per i modelli multimodali
+            // CRITICAL: Rimuovi responseMimeType e responseSchema per i modelli multimodali,
+            // in quanto la guida all'output JSON è fornita nel prompt di testo.
+            config = {}; 
         } else if (mimeType === 'text/plain' || mimeType === 'text/csv') { // File di testo semplice o CSV
             const textContent = await input.text();
             contents = [{ text: extractionPrompt + textContent }];
             // La configurazione rimane quella predefinita per i modelli di testo
         } else {
-            throw new Error(`Tipo di file non supportato o non riconosciuto per l'elaborazione IA: ${mimeType}. Assicurati che il file sia un'immagine, PDF, documento Word/Excel/PowerPoint o testo semplice.`);
+            throw new Error(`Tipo di file non supportato per l'estrazione: ${mimeType}. Assicurati che il file sia un'immagine, PDF, documento Word/Excel/PowerPoint o testo semplice.`);
         }
     }
 
     try {
         const response = await ai.models.generateContent({
             model: modelName,
-            contents: { parts: contents },
-            config: config,
+            contents: { parts: contents }, // Wrap contents in a 'parts' object for multiple parts
+            config: config, // Use the conditionally defined config
         });
 
         let jsonStr = response.text?.trim();
@@ -126,11 +137,16 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
             throw new Error("La risposta dell'IA non contiene dati JSON validi.");
         }
         
+        // Se responseMimeType non è stato imposto (es. per i modelli di immagini), l'output potrebbe
+        // essere avvolto in markdown o contenere testo conversazionale aggiuntivo.
+        // Tenta di estrarre la stringa JSON pura.
         if (modelName === 'gemini-2.5-flash-image' || !config.responseMimeType) {
+            // Primo, prova a trovare il JSON all'interno di un blocco di codice markdown
             const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/);
             if (jsonMatch && jsonMatch[1]) {
                 jsonStr = jsonMatch[1];
             } else {
+                // Se non ci sono blocchi di codice markdown, prova a trovare il primo array/oggetto e a estrarlo.
                 const firstBracket = jsonStr.indexOf('[');
                 const firstCurly = jsonStr.indexOf('{');
                 
@@ -149,12 +165,12 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
 
                     for (let i = startIndex; i < jsonStr.length; i++) {
                         const char = jsonStr[i];
-                        if (char === '"' && (i === 0 || jsonStr[i-1] !== '\\')) {
+                        if (char === '"' && (i === 0 || jsonStr[i-1] !== '\\')) { // Gestisce le virgolette per saltare il contenuto interno
                             let j = i + 1;
                             while(j < jsonStr.length && (jsonStr[j] !== '"' || jsonStr[j-1] === '\\')) {
                                 j++;
                             }
-                            i = j;
+                            i = j; // Salta a dopo la virgoletta di chiusura
                         } else if (char === opener) {
                             balance++;
                         } else if (char === closer) {
@@ -169,12 +185,15 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
                     if (endIndex !== -1) {
                         jsonStr = jsonStr.substring(startIndex, endIndex + 1);
                     } else {
+                        // Fallback: Se non viene trovata una struttura bilanciata, si assume che il modello abbia prodotto JSON semplice
+                        // senza wrapping extra, o si emette un avviso.
                         console.warn("Could not find a balanced JSON structure after prompt instruction, attempting direct parse.");
                     }
                 }
             }
         }
         
+        // Assicurati che la risposta sia un array
         const parsedResponse = JSON.parse(jsonStr);
         if (!Array.isArray(parsedResponse)) {
             throw new Error("La risposta dell'IA non è un array di eventi.");
@@ -182,6 +201,7 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
         return parsedResponse as ApiEventObject[];
     } catch (error) {
         console.error("Errore nell'estrazione degli eventi dall'IA:", error);
+        // Messaggio di errore personalizzato per il sovraccarico dell'API
         if ((error as any).status === 500 || ((error as any).message?.includes('Internal Server Error') || (error as any).message?.includes('The service is currently overloaded or unavailable.'))) {
             throw new Error("Il servizio IA è attualmente sovraccarico o non disponibile. Riprova tra qualche istante.");
         }
@@ -202,6 +222,7 @@ Luogo: ${event.location}
 Descrizione: ${event.description}
 
 Il campo "${field}" è invalido o formattato in modo errato. Il valore corrente è: "${
+    // FIX: Converti esplicitamente il campo in stringa quando accedi alle proprietà dell'evento per evitare errori di conversione implicita.
     event[String(field) as keyof EventObject]
 }".
 Per favore, suggerisci un valore corretto per il campo "${field}" basandoti sul contesto dell'evento.
@@ -213,6 +234,7 @@ Rispondi SOLO con il valore corretto per il campo, senza spiegazioni o testo agg
             model: 'gemini-3-flash-preview',
             contents: [{text: prompt}],
             config: {
+                // Ci aspettiamo una semplice risposta di stringa per la correzione
                 responseMimeType: "text/plain",
             }
         });
@@ -228,6 +250,8 @@ Rispondi SOLO con il valore corretto per il campo, senza spiegazioni o testo agg
     }
 }
 
+// Aggiunta la funzione `parseFilterFromQuery` per estrarre i parametri di filtro da una query testuale.
+// Utilizza l'IA per interpretare una query in linguaggio naturale e convertirla in un oggetto `FilterParams`.
 export async function parseFilterFromQuery(query: string): Promise<FilterParams> {
     const ai = getAiClient();
     const currentYear = new Date().getFullYear();
@@ -246,7 +270,8 @@ Query: "${query}"`;
             text: { type: Type.STRING, description: 'Testo da cercare nel riepilogo o nella descrizione. Stringa vuota se non specificata.' },
             location: { type: Type.STRING, description: 'Luogo dell\'evento da filtrare. Stringa vuota se non specificata.' },
         },
-        required: [],
+        required: [], // Tutti i campi sono opzionali dal punto di vista della query
+        // FIX: Assicurati che propertyOrdering sia digitato correttamente come string[]
         propertyOrdering: ['startDate', 'endDate', 'text', 'location'] as string[]
     };
 
@@ -266,6 +291,7 @@ Query: "${query}"`;
         }
         
         const parsedResponse = JSON.parse(jsonStr);
+        // Assicurati che tutte le proprietà siano presenti, anche se vuote, per corrispondere a FilterParams
         const result: FilterParams = {
             startDate: parsedResponse.startDate || '',
             endDate: parsedResponse.endDate || '',

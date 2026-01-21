@@ -99,8 +99,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesChange, files, di
     onFilesChange(files.filter(f => f !== fileToRemove));
   }
 
-  // FIX: Aggiunto .doc, .ppt, .pptx e chiarito i tipi di Excel
-  const acceptedFormats = ".txt, .csv, .doc, .docx, .xls, .xlsx, .pdf, .png, .jpg, .jpeg, .webp, .ppt, .pptx";
+  const acceptedFormats = ".txt, .csv, .doc, .docx, .xls, .xlsx, .pdf, .png, .jpg, .jpeg, .webp";
 
   // Nuova vista per lo stato di caricamento
   if (isProcessing) {
@@ -183,7 +182,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesChange, files, di
         <p className="font-semibold text-foreground/90">
           <span className="text-primary">Clicca per caricare</span> o trascina e rilascia
         </p>
-        <p className="text-xs text-muted-foreground">Supporta: TXT, CSV, DOC, XLSX, PDF, Immagini, PPT...</p>
+        <p className="text-xs text-muted-foreground">Supporta: TXT, CSV, DOC, XLSX, PDF, Immagini...</p>
       </div>
     </div>
   );
