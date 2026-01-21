@@ -99,7 +99,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesChange, files, di
     onFilesChange(files.filter(f => f !== fileToRemove));
   }
 
-  const acceptedFormats = ".txt, .csv, .doc, .docx, .xls, .xlsx, .pdf, .png, .jpg, .jpeg, .webp";
+  // Aggiornati i formati accettati per riflettere i tipi supportati in `geminiService.ts`
+  // I file DOC/DOCX/PPT/PPTX non sono supportati direttamente come input binario né come testo affidabile da `File.text()`
+  const acceptedFormats = ".txt, .csv, .xls, .xlsx, .pdf, .png, .jpg, .jpeg, .webp";
 
   // Nuova vista per lo stato di caricamento
   if (isProcessing) {
@@ -182,7 +184,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesChange, files, di
         <p className="font-semibold text-foreground/90">
           <span className="text-primary">Clicca per caricare</span> o trascina e rilascia
         </p>
-        <p className="text-xs text-muted-foreground">Supporta: TXT, CSV, DOC, XLSX, PDF, Immagini...</p>
+        <p className="text-xs text-muted-foreground">Supporta: TXT, CSV, XLS, XLSX, PDF, Immagini...</p>
       </div>
     </div>
   );

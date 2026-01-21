@@ -16,8 +16,10 @@ Trasforma qualsiasi elenco di eventi in appuntamenti pronti per il tuo calendari
 
 Scegli il metodo che preferisci:
 
--   **⬆️ Carica File**: Trascina o seleziona file `.docx`, `.xlsx`, `.txt`, `.pdf` e persino immagini.
--   **📋 Incolla Testo o Immagine**: Incolla direttamente il testo o uno screenshot nell'area apposita.
+-   **⬆️ Carica File**: Trascina o seleziona file `.xlsx`, `.txt`, `.pdf` e persino immagini.
+-   **📋 Incolla Testo o Immagine**: Incolla direttamente il testo o uno screenshot (anche di documenti Word, Excel o PDF) nell'area apposita.
+
+> **Nota per Word e PowerPoint**: Per i file `.docx`, `.doc`, `.pptx`, `.ppt`, è consigliabile copiare e incollare il testo direttamente nell'area di testo, oppure convertire il documento in PDF o un'immagine (screenshot) prima di caricarlo, in quanto l'app non supporta il caricamento diretto di questi formati binari.
 
 Una volta pronti, clicca su **"Elabora e Visualizza Anteprima"**.
 

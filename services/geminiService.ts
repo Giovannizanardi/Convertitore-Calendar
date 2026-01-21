@@ -53,7 +53,7 @@ Segui queste regole con precisione:
 6.  Se la data di fine non è specificata, assumi che sia la stessa della data di inizio.
 7.  Se non ci sono eventi da estrarre, restituisci un array vuoto: [].
 8.  Considera i nomi dei mesi e dei giorni della settimana in italiano.
-9.  Se il contenuto contiene immagini o documenti scansionati, concentrati sul testo all'interno delle immagini/documenti per gli eventi.
+9.  Il contenuto potrebbe provenire da un documento, un foglio di calcolo o un'immagine. Estrai le informazioni in formato tabellare anche se la formattazione originale è imperfetta.
 
 Contenuto da analizzare:
 `;
@@ -90,19 +90,22 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
         contents = [{ text: extractionPrompt + input }];
     } else { // File input (type: File)
         const mimeType = input.type;
-        
-        // --- MODIFICA CRITICA QUI ---
-        // Se il tipo MIME è un'immagine, lo inviamo al modello multimodale.
-        // Per tutti gli altri tipi di documenti (PDF, Word, Excel, PowerPoint, testo semplice),
-        // estraiamo il loro contenuto come testo e lo inviamo al modello di testo.
-        if (mimeType.startsWith('image/')) {
-            const base64Data = (await fileToBase64(input)).split(',')[1];
+        const base64Data = (await fileToBase64(input)).split(',')[1]; // Prepara base64 per potenziale uso multimodale
+
+        // MIME types che dovrebbero essere processati dal modello multimodale (image-capable) come inlineData
+        const multimodalMimeTypes = [
+            'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+            'application/pdf', // Tentativo di inviare PDF come inlineData al modello multimodale
+        ];
+
+        // Se il tipo MIME del file è supportato esplicitamente per inlineData multimodale
+        if (multimodalMimeTypes.includes(mimeType)) {
             modelName = 'gemini-2.5-flash-image'; // Usa il modello per immagini/multimodale
             contents = [
                 { text: extractionPrompt }, // Invia il prompt come parte di testo
                 {
                     inlineData: {
-                        mimeType: mimeType, // Usa il tipo MIME nativo dell'immagine
+                        mimeType: mimeType, // Usa il tipo MIME nativo (es. image/png, application/pdf)
                         data: base64Data,
                     },
                 },
@@ -110,27 +113,17 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
             // CRITICAL: Rimuovi responseMimeType e responseSchema per i modelli multimodali,
             // in quanto la guida all'output JSON è fornita nel prompt di testo.
             config = {}; 
-        } else if (
-            mimeType === 'text/plain' || 
-            mimeType === 'text/csv' ||
-            mimeType === 'application/pdf' || // Tratta PDF come testo
-            mimeType === 'application/msword' || // Tratta .doc come testo
-            mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || // Tratta .docx come testo
-            mimeType === 'application/vnd.ms-excel' || // Tratta .xls come testo
-            mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || // Tratta .xlsx come testo
-            mimeType === 'application/vnd.ms-powerpoint' || // Tratta .ppt come testo
-            mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' // Tratta .pptx come testo
-        ) {
-            // Per questi tipi, tentiamo di leggere il loro contenuto come testo semplice.
-            // Questo aiuta a evitare l'errore "Unsupported MIME type" per i documenti binari.
-            // La qualità dell'estrazione dipenderà dalla capacità del browser di interpretare
-            // il file binario come testo UTF-8.
+        } 
+        // Se è un file di testo semplice o CSV (o un file Excel già convertito in CSV da ImportView)
+        else if (mimeType === 'text/plain' || mimeType === 'text/csv') {
             const textContent = await input.text();
             contents = [{ text: extractionPrompt + textContent }];
             modelName = 'gemini-3-flash-preview'; // Assicurati di usare il modello di testo
             // La configurazione rimane quella predefinita per i modelli di testo (con responseMimeType e responseSchema)
-        } else {
-            throw new Error(`Tipo di file non supportato o non riconoscibile per l'elaborazione IA: ${mimeType}. Assicurati che il file sia un'immagine, PDF, documento Word/Excel/PowerPoint o testo semplice.`);
+        } 
+        else {
+            // Messaggio di errore aggiornato per chiarezza sui tipi di file supportati
+            throw new Error(`Tipo di file "${mimeType}" non supportato per l'elaborazione IA diretta. Carica immagini (PNG, JPG, ecc.), PDF, file di testo (TXT, CSV) o Excel (XLS, XLSX). Per i documenti Word (DOC, DOCX), PowerPoint (PPT, PPTX) o altri formati binari, incolla il testo o convertili in PDF/immagine prima del caricamento.`);
         }
     }
 

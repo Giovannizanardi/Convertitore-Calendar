@@ -133,8 +133,10 @@ export const ImportView: React.FC<ImportViewProps> = ({ setPage }) => {
                 let processedInput: File | string;
                 const fileExtension = file.name.split('.').pop()?.toLowerCase();
                 if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+                    // Excel files are pre-processed to CSV string, then passed as 'string' input.
                     processedInput = await parseExcelToCsv(file);
                 } else {
+                    // Other files (images, PDFs, TXT, CSV) are passed directly as File objects.
                     processedInput = file;
                 }
                 return extractEvents(processedInput);
@@ -289,7 +291,7 @@ export const ImportView: React.FC<ImportViewProps> = ({ setPage }) => {
                     onPaste={handlePaste}
                     disabled={isLoading}
                     rows={10}
-                    placeholder="Incolla qui i dati dei tuoi eventi in formato tabellare o incolla un'immagine..."
+                    placeholder="Incolla qui i dati dei tuoi eventi in formato tabellare o incolla un'immagine (es. uno screenshot di un documento o una tabella). Per i documenti Word/PowerPoint, è consigliabile incollare il testo direttamente."
                     className="w-full bg-secondary/50 border-2 border-dashed border-border rounded-lg p-4 text-foreground focus:border-primary focus:ring-primary transition-colors duration-200 disabled:opacity-50"
                     aria-label="Pasted text input"
                 />
