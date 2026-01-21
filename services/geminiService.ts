@@ -143,61 +143,57 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
 
         let jsonStr = response.text?.trim();
         if (!jsonStr) {
-            throw new Error("La risposta dell'IA non contiene dati JSON validi.");
+            throw new Error("La risposta dell'IA è vuota o non contiene dati validi.");
         }
         
-        // Se responseMimeType non è stato imposto (es. per i modelli di immagini), l'output potrebbe
-        // essere avvolto in markdown o contenere testo conversazionale aggiuntivo.
-        // Tenta di estrarre la stringa JSON pura.
-        if (modelName === 'gemini-2.5-flash-image' || !config.responseMimeType) {
-            // Primo, prova a trovare il JSON all'interno di un blocco di codice markdown
-            const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/);
-            if (jsonMatch && jsonMatch[1]) {
-                jsonStr = jsonMatch[1];
-            } else {
-                // Se non ci sono blocchi di codice markdown, prova a trovare il primo array/oggetto e a estrarlo.
-                const firstBracket = jsonStr.indexOf('[');
-                const firstCurly = jsonStr.indexOf('{');
-                
-                let startIndex = -1;
-                if (firstBracket !== -1 && (firstCurly === -1 || firstBracket < firstCurly)) {
-                    startIndex = firstBracket;
-                } else if (firstCurly !== -1) {
-                    startIndex = firstCurly;
+        // --- MODIFICA QUI: Applica sempre l'estrazione JSON robusta ---
+        // Tenta di estrarre la stringa JSON pura, anche se responseMimeType è stato imposto.
+        // Questo rende il parsing robusto a casi in cui il modello potrebbe aggiungere testo
+        // conversazionale o avvolgere il JSON in blocchi markdown, anche se istruito diversamente.
+        const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/);
+        if (jsonMatch && jsonMatch[1]) {
+            jsonStr = jsonMatch[1];
+        } else {
+            // Se non ci sono blocchi di codice markdown, prova a trovare il primo array/oggetto e a estrarlo.
+            const firstBracket = jsonStr.indexOf('[');
+            const firstCurly = jsonStr.indexOf('{');
+            
+            let startIndex = -1;
+            if (firstBracket !== -1 && (firstCurly === -1 || firstBracket < firstCurly)) {
+                startIndex = firstBracket;
+            } else if (firstCurly !== -1) {
+                startIndex = firstCurly;
+            }
+
+            if (startIndex !== -1) {
+                let endIndex = -1;
+                let balance = 0;
+                const opener = jsonStr[startIndex];
+                const closer = opener === '[' ? ']' : '}';
+
+                for (let i = startIndex; i < jsonStr.length; i++) {
+                    const char = jsonStr[i];
+                    if (char === '"' && (i === 0 || jsonStr[i-1] !== '\\')) { // Gestisce le virgolette per saltare il contenuto interno
+                        let j = i + 1;
+                        while(j < jsonStr.length && (jsonStr[j] !== '"' || jsonStr[j-1] === '\\')) {
+                            j++;
+                        }
+                        i = j; // Salta a dopo la virgoletta di chiusura
+                    } else if (char === opener) {
+                        balance++;
+                    } else if (char === closer) {
+                        balance--;
+                    }
+                    if (balance === 0 && char === closer) {
+                        endIndex = i;
+                        break;
+                    }
                 }
-
-                if (startIndex !== -1) {
-                    let endIndex = -1;
-                    let balance = 0;
-                    const opener = jsonStr[startIndex];
-                    const closer = opener === '[' ? ']' : '}';
-
-                    for (let i = startIndex; i < jsonStr.length; i++) {
-                        const char = jsonStr[i];
-                        if (char === '"' && (i === 0 || jsonStr[i-1] !== '\\')) { // Gestisce le virgolette per saltare il contenuto interno
-                            let j = i + 1;
-                            while(j < jsonStr.length && (jsonStr[j] !== '"' || jsonStr[j-1] === '\\')) {
-                                j++;
-                            }
-                            i = j; // Salta a dopo la virgoletta di chiusura
-                        } else if (char === opener) {
-                            balance++;
-                        } else if (char === closer) {
-                            balance--;
-                        }
-                        if (balance === 0 && char === closer) {
-                            endIndex = i;
-                            break;
-                        }
-                    }
-                    
-                    if (endIndex !== -1) {
-                        jsonStr = jsonStr.substring(startIndex, endIndex + 1);
-                    } else {
-                        // Fallback: Se non viene trovata una struttura bilanciata, si assume che il modello abbia prodotto JSON semplice
-                        // senza wrapping extra, o si emette un avviso.
-                        console.warn("Could not find a balanced JSON structure after prompt instruction, attempting direct parse.");
-                    }
+                
+                if (endIndex !== -1) {
+                    jsonStr = jsonStr.substring(startIndex, endIndex + 1);
+                } else {
+                    console.warn("Could not find a balanced JSON structure in AI response, attempting direct parse. Response was: " + jsonStr);
                 }
             }
         }
@@ -205,7 +201,7 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
         // Assicurati che la risposta sia un array
         const parsedResponse = JSON.parse(jsonStr);
         if (!Array.isArray(parsedResponse)) {
-            throw new Error("La risposta dell'IA non è un array di eventi.");
+            throw new Error("La risposta dell'IA non è un array di eventi o non è nel formato JSON atteso.");
         }
         return parsedResponse as ApiEventObject[];
     } catch (error) {
@@ -234,7 +230,7 @@ Il campo "${field}" è invalido o formattato in modo errato. Il valore corrente 
     // FIX: Converti esplicitamente il campo in stringa quando accedi alle proprietà dell'evento per evitare errori di conversione implicita.
     event[String(field) as keyof EventObject]
 }".
-Per favore, suggerisci un valore corretto per il campo "${field}" basandoti sul contesto dell'evento.
+Per favorire, suggerisci un valore corretto per il campo "${field}" basandoti sul contesto dell'evento.
 Normalizza le date al formato AAAA-MM-GG e gli orari al formato HH:mm.
 Rispondi SOLO con il valore corretto per il campo, senza spiegazioni o testo aggiuntivo.`;
 
