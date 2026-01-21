@@ -1,5 +1,3 @@
-declare var process: any; // Dichiarazione per informare TypeScript che 'process' esisterà a runtime.
-
 import { GoogleGenAI, Type } from "@google/genai";
 import type { Part, GenerateContentParameters } from "@google/genai";
 import type { EventObject } from "../lib/types";
@@ -14,12 +12,11 @@ export interface FilterParams {
 }
 
 const getAiClient = () => {
-    // CORREZIONE: Aggiornato per utilizzare `process.env.API_KEY` come specificato nelle linee guida di @google/genai.
-    // Si assume che questa variabile d'ambiente sia pre-configurata e accessibile.
+    // FIX: Allineato alle linee guida di @google/genai: L'API key deve essere ottenuta esclusivamente da process.env.API_KEY.
+    // Si assume che process.env.API_KEY sia pre-configurato, valido e accessibile.
     const apiKey = process.env.API_KEY;
     
     if (!apiKey) {
-        // CORREZIONE: Aggiornato il messaggio di errore per riflettere il nome corretto della variabile d'ambiente (`API_KEY`).
         throw new Error("La variabile d'ambiente API_KEY non è impostata. Assicurati che sia definita nel tuo ambiente.");
     }
 
