@@ -1,7 +1,9 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as gcal from '../services/googleCalendarService';
 import { Loader } from './Loader';
-import { GoogleIcon, SearchIcon, PencilLineIcon, SparklesIcon, CalendarIcon, ChevronsUpDownIcon, ArrowLeftIcon, XIcon, ClockIcon } from './Icons';
+// Added missing CheckCircleIcon to the imports
+import { GoogleIcon, SearchIcon, PencilLineIcon, SparklesIcon, CalendarIcon, ChevronsUpDownIcon, ArrowLeftIcon, XIcon, ClockIcon, CheckCircleIcon } from './Icons';
 import { parseFilterFromQuery, FilterParams } from '../services/geminiService';
 
 type GCalState = 'initial' | 'authenticating' | 'authenticated' | 'loading' | 'error';
@@ -259,6 +261,19 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
                  <p className="text-muted-foreground">Accesso effettuato come <span className="font-semibold text-foreground">{user?.email}</span></p>
             </div>
 
+            {/* Error Message */}
+            {error && (
+                <div className="bg-destructive/10 border border-destructive/20 text-destructive-foreground p-4 rounded-xl flex justify-between items-start animate-fade-in">
+                    <div>
+                        <p className="font-bold">{error.title}</p>
+                        <p className="text-sm">{error.message}</p>
+                    </div>
+                    <button onClick={() => setError(null)} className="p-1 hover:bg-destructive/10 rounded-full">
+                        <XIcon className="h-5 w-5" />
+                    </button>
+                </div>
+            )}
+
             {/* Calendar Selector */}
             <div className="max-w-4xl mx-auto" ref={calendarDropdownRef}>
                 <div className="relative">
@@ -267,6 +282,7 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
                             <CalendarIcon className="w-5 h-5 text-indigo-500"/>
                             <span className="font-medium">{selectedCalendarIds.size} calendari selezionati</span>
                         </span>
+                        <CheckCircleIcon className={`w-5 h-5 text-green-500 transition-opacity ${selectedCalendarIds.size > 0 ? 'opacity-100' : 'opacity-0'}`} />
                         <ChevronsUpDownIcon className="w-5 h-5 text-muted-foreground"/>
                     </button>
                     {isCalendarDropdownOpen && (
@@ -337,6 +353,22 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
                             </div>
                         </div>
                     </div>
+                    
+                    {updateProgress && (
+                        <div className="mt-6 w-full max-w-md mx-auto space-y-2">
+                            <div className="flex justify-between text-xs text-indigo-400">
+                                <span>Aggiornamento in corso...</span>
+                                <span>{updateProgress.current} / {updateProgress.total}</span>
+                            </div>
+                            <div className="w-full bg-indigo-500/10 h-2 rounded-full overflow-hidden">
+                                <div 
+                                    className="bg-indigo-500 h-full transition-all duration-300" 
+                                    style={{ width: `${(updateProgress.current / updateProgress.total) * 100}%` }}
+                                />
+                            </div>
+                        </div>
+                    )}
+
                     <div className="mt-8 text-center">
                         <button onClick={handleUpdateSelected} disabled={isUpdating} className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-4 px-12 rounded-full shadow-2xl shadow-indigo-500/40 flex items-center justify-center space-x-3 mx-auto transition-all transform hover:scale-105 active:scale-95">
                             {isUpdating ? <Loader className="h-5 w-5"/> : <PencilLineIcon className="h-5 w-5" />}
