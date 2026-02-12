@@ -1,17 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { ThemeCustomizer } from './components/ThemeCustomizer';
-// FIX: Import metadata.json as a raw string to bypass module resolution issues for JSON files.
-// The content will be parsed manually in useEffect.
 import rawMetadata from './metadata.json?raw'; 
 import { Dashboard } from './components/Dashboard';
 import { ImportView } from './components/ImportView';
 import { CleanupView } from './components/CleanupView';
+import { MassiveEditView } from './components/MassiveEditView';
 import { HelpModal } from './components/HelpModal';
 import readmeContent from './README.md?raw';
 
 export default function App() {
-  const [page, setPage] = useState<'dashboard' | 'import' | 'cleanup'>('dashboard');
+  const [page, setPage] = useState<'dashboard' | 'import' | 'cleanup' | 'massive-edit'>('dashboard');
   const [isThemeCustomizerOpen, setThemeCustomizerOpen] = useState(false);
   const [isHelpOpen, setHelpOpen] = useState(false);
   const [appName, setAppName] = useState<string>('');
@@ -19,7 +18,6 @@ export default function App() {
 
   useEffect(() => {
     try {
-      // FIX: Manually parse the raw JSON string content.
       const metadata = JSON.parse(rawMetadata);
       setAppName(metadata.name || 'ForMa Calendar Suite');
       setAppDescription(metadata.description || 'Una suite intelligente per importare e pulire i tuoi calendari.');
@@ -36,6 +34,8 @@ export default function App() {
         return <ImportView setPage={setPage} />;
       case 'cleanup':
         return <CleanupView setPage={setPage} />;
+      case 'massive-edit':
+        return <MassiveEditView setPage={setPage} />;
       case 'dashboard':
       default:
         return <Dashboard setPage={setPage} />;

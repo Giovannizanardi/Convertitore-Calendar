@@ -11,18 +11,9 @@ export interface FilterParams {
     location: string;
 }
 
+// FIX: Following Google GenAI SDK guidelines to obtain the API key exclusively from process.env.API_KEY.
 const getAiClient = () => {
-    // FIX: Allineato all'uso di `import.meta.env.VITE_API_KEY` per ambienti Vite frontend.
-    // Le linee guida `@google/genai` relative a `process.env.API_KEY` sono primariamente per ambienti Node.js.
-    // In un'app Vite, `import.meta.env` è il meccanismo corretto per le variabili d'ambiente,
-    // risolvendo sia l'errore di TypeScript che il problema a runtime.
-    const apiKey = import.meta.env.VITE_API_KEY;
-    
-    if (!apiKey) {
-        throw new Error("La variabile d'ambiente VITE_API_KEY non è impostata. Assicurati che sia definita nel tuo file .env (es. VITE_API_KEY=LaTuaChiaveAPI) e che sia accessibile tramite import.meta.env.");
-    }
-
-    return new GoogleGenAI({ apiKey });
+    return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 const eventSchema = {

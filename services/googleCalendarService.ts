@@ -46,7 +46,6 @@ const waitForGlobal = <T>(name: string, timeout = 5000): Promise<T> => {
                 if (elapsed >= timeout) {
                     reject(new Error(`Timeout in attesa della disponibilità di ${name}.`));
                 } else {
-                    // FIX: Moved console.log outside setTimeout to avoid passing 'void' as delay.
                     console.log(`Waiting for ${name}...`); 
                     setTimeout(check, interval); 
                 }
@@ -65,9 +64,6 @@ export const initGapiClient = (): Promise<void> => {
         }
         window.gapi.load('client', async () => {
             try {
-                // L'API key non è necessaria qui perché stiamo usando OAuth 2.0 per l'autorizzazione.
-                // Il token di accesso ottenuto dall'utente verrà utilizzato per le chiamate API.
-                // La rimozione dell'API key risolve l'errore "API_KEY_INVALID".
                 await window.gapi.client.init({
                     discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
                 });
@@ -108,30 +104,19 @@ const initGisClient = (callback: (tokenResponse: any) => void): Promise<void> =>
     });
 };
 
-/**
- * Gestisce l'autenticazione dell'utente tramite il clic del pulsante.
- * @param callback La funzione di callback da eseguire con la risposta del token.
- * @param promptType Il tipo di prompt da mostrare all'utente. Può essere 'consent', 'select_account' o vuoto.
- */
 export const handleAuthClick = async (callback: (tokenResponse: any) => void, promptType: 'consent' | 'select_account' | '' = 'consent') => {
     await initGisClient(callback);
     tokenClient.requestAccessToken({prompt: promptType});
 };
 
-/**
- * Tenta di autenticare l'utente silenziosamente.
- * Questo è un wrapper per handleAuthClick con promptType vuoto.
- * @param callback La funzione di callback da eseguire con la risposta del token.
- */
 export const handleSilentAuth = async (callback: (tokenResponse: any) => void) => {
-    await handleAuthClick(callback, ''); // Usa il prompt vuoto per il login silenzioso
+    await handleAuthClick(callback, ''); 
 };
 
 
 // List user's calendars
 export const listCalendars = async () => {
     const response = await window.gapi.client.calendar.calendarList.list({});
-    // Sort to put the primary calendar first
     const calendars = response.result.items.sort((a: any, b: any) => {
         if (a.primary) return -1;
         if (b.primary) return 1;
@@ -142,7 +127,6 @@ export const listCalendars = async () => {
 
 // Get user's profile information
 export const getUserProfile = async () => {
-    // This API does not require a discovery doc
      return await window.gapi.client.request({
         'path': 'https://www.googleapis.com/oauth2/v2/userinfo'
      });
@@ -151,9 +135,6 @@ export const getUserProfile = async () => {
 
 // Insert a new event
 export const insertEvent = async (calendarId: string, event: ValidatedEvent) => {
-    // Calcola l'offset del fuso orario locale dell'utente per creare un timestamp RFC3339 completo.
-    // Questo è più robusto rispetto all'invio di un nome di fuso orario IANA,
-    // in quanto elimina le ambiguità che possono causare il fallimento silenzioso della creazione dell'evento.
     const offsetMinutes = new Date().getTimezoneOffset();
     const offsetHours = Math.abs(Math.floor(offsetMinutes / 60));
     const offsetMins = Math.abs(offsetMinutes % 60);
@@ -173,24 +154,39 @@ export const insertEvent = async (calendarId: string, event: ValidatedEvent) => 
     };
 
     try {
-        // Usa direttamente l'await sulla chiamata API, che restituisce una Promise
         const response = await window.gapi.client.calendar.events.insert({
             'calendarId': calendarId,
             'resource': eventResource
         });
 
-        // Controlla se la risposta e il risultato sono validi
         if (response && response.result) {
             return response.result;
         } else {
-            // Gestisce i fallimenti silenziosi in cui la risposta non contiene l'evento creato.
-            console.error('L\'API di Google Calendar non ha restituito né un errore né un risultato. L\'evento potrebbe non essere stato creato.', response);
-            throw new Error('L\'inserimento dell\'evento non è riuscito silenziosamente. Controlla i dati dell\'evento e il fuso orario.');
+            throw new Error('L\'inserimento dell\'evento non è riuscito silenziosamente.');
         }
     } catch (error: any) {
         console.error('Errore API di Google Calendar durante l\'inserimento dell\'evento:', error);
-        // Estrae il messaggio di errore più specifico dall'oggetto di errore dell'API
         const errorMessage = error.result?.error?.message || error.message || 'Errore sconosciuto durante l\'inserimento.';
+        throw new Error(errorMessage);
+    }
+};
+
+// Patch an existing event
+export const patchEvent = async (calendarId: string, eventId: string, resource: any) => {
+    try {
+        const response = await window.gapi.client.calendar.events.patch({
+            'calendarId': calendarId,
+            'eventId': eventId,
+            'resource': resource
+        });
+        if (response && response.result) {
+            return response.result;
+        } else {
+            throw new Error('La modifica dell\'evento non è riuscita.');
+        }
+    } catch (error: any) {
+        console.error('Errore API di Google Calendar durante la modifica dell\'evento:', error);
+        const errorMessage = error.result?.error?.message || error.message || 'Errore sconosciuto durante la modifica.';
         throw new Error(errorMessage);
     }
 };
@@ -200,11 +196,11 @@ export const listEvents = async (calendarId: string, timeMin: string, timeMax: s
     try {
         const response = await window.gapi.client.calendar.events.list({
             'calendarId': calendarId,
-            'timeMin': timeMin, // RFC3339 timestamp, e.g., '2023-01-01T00:00:00Z'
-            'timeMax': timeMax, // RFC3339 timestamp
+            'timeMin': timeMin, 
+            'timeMax': timeMax, 
             'showDeleted': false,
             'singleEvents': true,
-            'maxResults': 2500, // Max results per page
+            'maxResults': 2500, 
             'orderBy': 'startTime'
         });
         return response.result.items;
@@ -222,7 +218,6 @@ export const deleteEvent = async (calendarId: string, eventId: string) => {
             'calendarId': calendarId,
             'eventId': eventId
         });
-        // A successful deletion returns an empty response (status 204)
         return response;
     } catch (error: any) {
         console.error('Errore API di Google Calendar durante l\'eliminazione dell\'evento:', error);
