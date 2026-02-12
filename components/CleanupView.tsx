@@ -26,7 +26,8 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
     const [isDeleting, setIsDeleting] = useState(false);
     const [deletionProgress, setDeletionProgress] = useState<{ current: number; total: number } | null>(null);
     const [aiQuery, setAiQuery] = useState('');
-    const [manualFilters, setManualFilters] = useState<FilterParams>({ startDate: '', endDate: '', text: '', location: '' });
+    // FIX: Added 'startTime' to match the updated FilterParams interface in geminiService.ts
+    const [manualFilters, setManualFilters] = useState<FilterParams>({ startDate: '', endDate: '', startTime: '', text: '', location: '' });
     const [isSearching, setIsSearching] = useState(false);
     const [searchPerformed, setSearchPerformed] = useState(false);
     
@@ -144,11 +145,26 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
             if (fetchedEvents) {
                 const textFilter = filters.text.toLowerCase();
                 const locationFilter = filters.location.toLowerCase();
+                // FIX: Implemented startTime filtering to match FilterParams usage
+                const startTimeFilter = filters.startTime;
                 
                 const filtered = fetchedEvents.filter(event => {
                     const textMatch = !textFilter || (event.summary?.toLowerCase().includes(textFilter) || event.description?.toLowerCase().includes(textFilter));
                     const locationMatch = !locationFilter || event.location?.toLowerCase().includes(locationFilter);
-                    return textMatch && locationMatch;
+                    
+                    let startTimeMatch = true;
+                    if (startTimeFilter) {
+                        const eventDateTime = event.start.dateTime || event.start.date || '';
+                        if (eventDateTime) {
+                            const eventDateObj = new Date(eventDateTime);
+                            const eventTimeStr = eventDateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false });
+                            startTimeMatch = eventTimeStr.includes(startTimeFilter);
+                        } else {
+                            startTimeMatch = false;
+                        }
+                    }
+
+                    return textMatch && locationMatch && startTimeMatch;
                 });
                 setEvents(filtered);
             }
@@ -404,7 +420,7 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
 
             {/* Manual Filters */}
             <div className="max-w-4xl mx-auto bg-card p-4 rounded-lg border border-border space-y-4 shadow-sm">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                     <div>
                         <label htmlFor="startDate" className="block mb-1 text-sm font-medium text-muted-foreground">Data Inizio</label>
                         <input type="date" id="startDate" value={manualFilters.startDate} onChange={e => setManualFilters(f => ({...f, startDate: e.target.value}))} className="bg-input border border-border text-foreground text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"/>
@@ -412,6 +428,11 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
                     <div>
                         <label htmlFor="endDate" className="block mb-1 text-sm font-medium text-muted-foreground">Data Fine</label>
                         <input type="date" id="endDate" value={manualFilters.endDate} onChange={e => setManualFilters(f => ({...f, endDate: e.target.value}))} className="bg-input border border-border text-foreground text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"/>
+                    </div>
+                    {/* FIX: Added startTime input field to manual filters */}
+                    <div>
+                        <label htmlFor="startTime" className="block mb-1 text-sm font-medium text-muted-foreground">Ora Inizio</label>
+                        <input type="time" id="startTime" value={manualFilters.startTime} onChange={e => setManualFilters(f => ({...f, startTime: e.target.value}))} className="bg-input border border-border text-foreground text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"/>
                     </div>
                     <div className="lg:col-span-2">
                         <label htmlFor="text-filter" className="block mb-1 text-sm font-medium text-muted-foreground">Riepilogo / Descrizione</label>

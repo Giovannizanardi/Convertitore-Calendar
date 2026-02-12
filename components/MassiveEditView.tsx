@@ -1,8 +1,6 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as gcal from '../services/googleCalendarService';
 import { Loader } from './Loader';
-// Added missing CheckCircleIcon to the imports
 import { GoogleIcon, SearchIcon, PencilLineIcon, SparklesIcon, CalendarIcon, ChevronsUpDownIcon, ArrowLeftIcon, XIcon, ClockIcon, CheckCircleIcon } from './Icons';
 import { parseFilterFromQuery, FilterParams } from '../services/geminiService';
 
@@ -28,7 +26,7 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
     const [isUpdating, setIsUpdating] = useState(false);
     const [updateProgress, setUpdateProgress] = useState<{ current: number; total: number } | null>(null);
     const [aiQuery, setAiQuery] = useState('');
-    const [manualFilters, setManualFilters] = useState<FilterParams>({ startDate: '', endDate: '', text: '', location: '' });
+    const [manualFilters, setManualFilters] = useState<FilterParams>({ startDate: '', endDate: '', startTime: '', text: '', location: '' });
     const [isSearching, setIsSearching] = useState(false);
     const [searchPerformed, setSearchPerformed] = useState(false);
     
@@ -36,6 +34,8 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
         summary: '',
         location: '',
         description: '',
+        startTime: '',
+        endTime: '',
         duration: ''
     });
 
@@ -133,11 +133,25 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
             
             const textFilter = filters.text.toLowerCase();
             const locationFilter = filters.location.toLowerCase();
+            const startTimeFilter = filters.startTime;
             
             const filtered = allEvents.filter(event => {
                 const textMatch = !textFilter || (event.summary?.toLowerCase().includes(textFilter) || event.description?.toLowerCase().includes(textFilter));
                 const locationMatch = !locationFilter || event.location?.toLowerCase().includes(locationFilter);
-                return textMatch && locationMatch;
+                
+                let startTimeMatch = true;
+                if (startTimeFilter) {
+                    const eventDateTime = event.start.dateTime || event.start.date || '';
+                    if (eventDateTime) {
+                        const eventDateObj = new Date(eventDateTime);
+                        const eventTimeStr = eventDateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false });
+                        startTimeMatch = eventTimeStr.includes(startTimeFilter);
+                    } else {
+                        startTimeMatch = false;
+                    }
+                }
+
+                return textMatch && locationMatch && startTimeMatch;
             });
             setEvents(filtered);
         } catch (err: any) {
@@ -165,7 +179,7 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
         const totalToUpdate = selectedEventIds.size;
         if (totalToUpdate === 0) return;
         
-        const updatesAvailable = bulkUpdates.summary || bulkUpdates.location || bulkUpdates.description || bulkUpdates.duration;
+        const updatesAvailable = bulkUpdates.summary || bulkUpdates.location || bulkUpdates.description || bulkUpdates.startTime || bulkUpdates.endTime || bulkUpdates.duration;
         if (!updatesAvailable) {
             alert("Per favore, inserisci almeno una modifica da applicare.");
             return;
@@ -179,6 +193,14 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
         const BATCH_SIZE = 5;
         const failedUpdates: any[] = [];
 
+        // Helper per formattare la data con il nuovo orario preservando la data originale
+        const applyTimeToDate = (originalDateTime: string, newTime: string) => {
+            const date = new Date(originalDateTime);
+            const [hours, minutes] = newTime.split(':').map(Number);
+            date.setHours(hours, minutes, 0, 0);
+            return date.toISOString();
+        };
+
         try {
             for (let i = 0; i < selectedEvents.length; i += BATCH_SIZE) {
                 const batch = selectedEvents.slice(i, i + BATCH_SIZE);
@@ -190,10 +212,26 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
                         if (bulkUpdates.location) resource.location = bulkUpdates.location;
                         if (bulkUpdates.description) resource.description = bulkUpdates.description;
                         
+                        const currentStart = event.start.dateTime || event.start.date || '';
+                        const currentEnd = event.end.dateTime || event.end.date || '';
+
+                        if (bulkUpdates.startTime) {
+                            resource.start = { dateTime: applyTimeToDate(currentStart, bulkUpdates.startTime) };
+                        }
+
+                        if (bulkUpdates.endTime) {
+                            resource.end = { dateTime: applyTimeToDate(currentEnd, bulkUpdates.endTime) };
+                        }
+                        
                         if (bulkUpdates.duration) {
                             const minutes = parseInt(bulkUpdates.duration);
                             if (!isNaN(minutes)) {
-                                const start = new Date(event.start.dateTime || event.start.date || '');
+                                // Se startTime è stato cambiato in questo batch, usa quello come riferimento
+                                const startRef = bulkUpdates.startTime 
+                                    ? applyTimeToDate(currentStart, bulkUpdates.startTime)
+                                    : currentStart;
+                                
+                                const start = new Date(startRef);
                                 const newEnd = new Date(start.getTime() + minutes * 60000);
                                 resource.end = { dateTime: newEnd.toISOString() };
                             }
@@ -223,7 +261,7 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
                 });
             } else {
                 alert("Aggiornamento completato con successo!");
-                setBulkUpdates({ summary: '', location: '', description: '', duration: '' });
+                setBulkUpdates({ summary: '', location: '', description: '', startTime: '', endTime: '', duration: '' });
                 setSelectedEventIds(new Set());
                 executeSearch(manualFilters); 
             }
@@ -306,13 +344,26 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
             {/* Search Panel */}
             <div className="bg-card p-6 rounded-2xl border border-border shadow-lg space-y-4">
                 <div className="flex space-x-2">
-                    <input type="text" value={aiQuery} onChange={e => setAiQuery(e.target.value)} placeholder="Usa l'IA: 'Lezioni del lunedì' o 'Tutti gli eventi in palestra'..." className="bg-input border border-border text-foreground text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block w-full p-4" onKeyDown={e => e.key === 'Enter' && handleAiAutoFill()}/>
+                    <input type="text" value={aiQuery} onChange={e => setAiQuery(e.target.value)} placeholder="Usa l'IA: 'Tutti gli eventi del pomeriggio' o 'Riunioni delle 10:00'..." className="bg-input border border-border text-foreground text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block w-full p-4" onKeyDown={e => e.key === 'Enter' && handleAiAutoFill()}/>
                     <button onClick={handleAiAutoFill} disabled={isSearching} className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold p-4 rounded-xl transition-all shadow-lg shadow-indigo-500/20"><SparklesIcon className="w-5 h-5" /></button>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-border">
-                    <input type="date" value={manualFilters.startDate} onChange={e => setManualFilters(f => ({...f, startDate: e.target.value}))} className="bg-input border border-border text-foreground text-sm rounded-xl p-3"/>
-                    <input type="date" value={manualFilters.endDate} onChange={e => setManualFilters(f => ({...f, endDate: e.target.value}))} className="bg-input border border-border text-foreground text-sm rounded-xl p-3"/>
-                    <input type="text" placeholder="Cerca nel testo..." value={manualFilters.text} onChange={e => setManualFilters(f => ({...f, text: e.target.value}))} className="bg-input border border-border text-foreground text-sm rounded-xl p-3 lg:col-span-2"/>
+                <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4 pt-4 border-t border-border">
+                    <div className="flex flex-col space-y-1">
+                        <label className="text-xs text-muted-foreground ml-1">Da Data</label>
+                        <input type="date" value={manualFilters.startDate} onChange={e => setManualFilters(f => ({...f, startDate: e.target.value}))} className="bg-input border border-border text-foreground text-sm rounded-xl p-3"/>
+                    </div>
+                    <div className="flex flex-col space-y-1">
+                        <label className="text-xs text-muted-foreground ml-1">A Data</label>
+                        <input type="date" value={manualFilters.endDate} onChange={e => setManualFilters(f => ({...f, endDate: e.target.value}))} className="bg-input border border-border text-foreground text-sm rounded-xl p-3"/>
+                    </div>
+                    <div className="flex flex-col space-y-1">
+                        <label className="text-xs text-muted-foreground ml-1">Ora Inizio</label>
+                        <input type="time" value={manualFilters.startTime} onChange={e => setManualFilters(f => ({...f, startTime: e.target.value}))} className="bg-input border border-border text-foreground text-sm rounded-xl p-3"/>
+                    </div>
+                    <div className="flex flex-col space-y-1 lg:col-span-2">
+                         <label className="text-xs text-muted-foreground ml-1">Testo / Luogo</label>
+                        <input type="text" placeholder="Cerca..." value={manualFilters.text} onChange={e => setManualFilters(f => ({...f, text: e.target.value}))} className="bg-input border border-border text-foreground text-sm rounded-xl p-3"/>
+                    </div>
                 </div>
                 <div className="text-right">
                     <button onClick={() => executeSearch(manualFilters)} disabled={isSearching} className="bg-secondary hover:bg-muted text-secondary-foreground font-bold py-3 px-8 rounded-xl inline-flex items-center space-x-2 transition-all">
@@ -332,7 +383,7 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
                         </div>
                         <button onClick={() => setSelectedEventIds(new Set())} className="p-2 hover:bg-indigo-500/10 rounded-full transition-colors"><XIcon className="h-6 w-6"/></button>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         <div className="space-y-2">
                             <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">Oggetto</label>
                             <input type="text" placeholder="Nuovo titolo..." value={bulkUpdates.summary} onChange={e => setBulkUpdates(b => ({...b, summary: e.target.value}))} className="bg-input border border-border text-sm rounded-xl p-3.5 w-full focus:ring-indigo-500"/>
@@ -344,6 +395,14 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
                         <div className="space-y-2">
                             <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">Descrizione</label>
                             <input type="text" placeholder="Nuova descrizione..." value={bulkUpdates.description} onChange={e => setBulkUpdates(b => ({...b, description: e.target.value}))} className="bg-input border border-border text-sm rounded-xl p-3.5 w-full focus:ring-indigo-500"/>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">Ora Inizio</label>
+                            <input type="time" value={bulkUpdates.startTime} onChange={e => setBulkUpdates(b => ({...b, startTime: e.target.value}))} className="bg-input border border-border text-sm rounded-xl p-3.5 w-full focus:ring-indigo-500"/>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">Ora Fine</label>
+                            <input type="time" value={bulkUpdates.endTime} onChange={e => setBulkUpdates(b => ({...b, endTime: e.target.value}))} className="bg-input border border-border text-sm rounded-xl p-3.5 w-full focus:ring-indigo-500"/>
                         </div>
                         <div className="space-y-2">
                             <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">Durata (minuti)</label>

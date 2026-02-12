@@ -7,6 +7,7 @@ export type ApiEventObject = Omit<EventObject, 'id'>;
 export interface FilterParams {
     startDate: string;
     endDate: string;
+    startTime: string; // Aggiunto startTime
     text: string;
     location: string;
 }
@@ -256,12 +257,13 @@ Query: "${query}"`;
         properties: {
             startDate: { type: Type.STRING, description: 'Data di inizio filtro (AAAA-MM-GG). Stringa vuota se non specificata.' },
             endDate: { type: Type.STRING, description: 'Data di fine filtro (AAAA-MM-GG). Stringa vuota se non specificata.' },
+            startTime: { type: Type.STRING, description: 'Ora di inizio filtro (HH:mm). Stringa vuota se non specificata.' },
             text: { type: Type.STRING, description: 'Testo da cercare nel riepilogo o nella descrizione. Stringa vuota se non specificata.' },
             location: { type: Type.STRING, description: 'Luogo dell\'evento da filtrare. Stringa vuota se non specificata.' },
         },
         required: [], // Tutti i campi sono opzionali dal punto di vista della query
         // FIX: Assicurati che propertyOrdering sia digitato correttamente come string[]
-        propertyOrdering: ['startDate', 'endDate', 'text', 'location'] as string[]
+        propertyOrdering: ['startDate', 'endDate', 'startTime', 'text', 'location'] as string[]
     };
 
     try {
@@ -284,6 +286,7 @@ Query: "${query}"`;
         const result: FilterParams = {
             startDate: parsedResponse.startDate || '',
             endDate: parsedResponse.endDate || '',
+            startTime: parsedResponse.startTime || '',
             text: parsedResponse.text || '',
             location: parsedResponse.location || '',
         };
