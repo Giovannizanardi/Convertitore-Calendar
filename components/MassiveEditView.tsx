@@ -30,7 +30,6 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
     const [isSearching, setIsSearching] = useState(false);
     const [searchPerformed, setSearchPerformed] = useState(false);
     
-    // Form di modifica massiva
     const [bulkUpdates, setBulkUpdates] = useState({
         summary: '',
         location: '',
@@ -224,7 +223,7 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
                 alert("Aggiornamento completato con successo!");
                 setBulkUpdates({ summary: '', location: '', description: '', duration: '' });
                 setSelectedEventIds(new Set());
-                executeSearch(manualFilters); // Refresh results
+                executeSearch(manualFilters); 
             }
         }
     };
@@ -236,9 +235,9 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
 
     if (gcalState === 'initial' || gcalState === 'authenticating') {
         return (
-            <div className="text-center p-8 bg-card rounded-lg border border-border">
+            <div className="text-center p-8 bg-card rounded-2xl border border-border shadow-xl">
                 <h2 className="text-2xl font-bold mb-3">Modifica Massiva Eventi</h2>
-                <p className="text-muted-foreground mb-6 max-w-xl mx-auto">
+                <p className="text-muted-foreground mb-8 max-w-xl mx-auto">
                     Connettiti a Google per trovare e aggiornare contemporaneamente più eventi nel tuo calendario.
                 </p>
                 <div className="flex justify-center items-center space-x-4">
@@ -255,7 +254,7 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
     }
 
     return (
-        <div className="animate-fade-in space-y-6">
+        <div className="animate-fade-in space-y-6 max-w-5xl mx-auto">
             <div className="text-center">
                  <p className="text-muted-foreground">Accesso effettuato come <span className="font-semibold text-foreground">{user?.email}</span></p>
             </div>
@@ -263,24 +262,24 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
             {/* Calendar Selector */}
             <div className="max-w-4xl mx-auto" ref={calendarDropdownRef}>
                 <div className="relative">
-                    <button onClick={() => setCalendarDropdownOpen(o => !o)} className="bg-input border border-border text-foreground text-sm rounded-lg block w-full p-3 text-left flex justify-between items-center">
-                        <span className="flex items-center space-x-2">
-                            <CalendarIcon className="w-5 h-5 text-muted-foreground"/>
-                            <span>{selectedCalendarIds.size} calendari selezionati</span>
+                    <button onClick={() => setCalendarDropdownOpen(o => !o)} className="bg-input border border-border text-foreground text-sm rounded-xl block w-full p-4 text-left flex justify-between items-center transition-all hover:bg-accent/50">
+                        <span className="flex items-center space-x-3">
+                            <CalendarIcon className="w-5 h-5 text-indigo-500"/>
+                            <span className="font-medium">{selectedCalendarIds.size} calendari selezionati</span>
                         </span>
                         <ChevronsUpDownIcon className="w-5 h-5 text-muted-foreground"/>
                     </button>
                     {isCalendarDropdownOpen && (
-                        <div className="absolute z-10 top-full mt-2 w-full bg-card border border-border rounded-lg shadow-lg p-2 max-h-60 overflow-y-auto">
+                        <div className="absolute z-10 top-full mt-2 w-full bg-card border border-border rounded-xl shadow-2xl p-2 max-h-60 overflow-y-auto animate-fade-in">
                             {calendars.map(cal => (
-                                <label key={cal.id} className="flex items-center space-x-3 p-2 hover:bg-accent rounded-md cursor-pointer">
+                                <label key={cal.id} className="flex items-center space-x-3 p-3 hover:bg-accent rounded-lg cursor-pointer transition-colors">
                                     <input type="checkbox" checked={selectedCalendarIds.has(cal.id)} onChange={() => {
                                         const newSet = new Set(selectedCalendarIds);
                                         if(newSet.has(cal.id)) newSet.delete(cal.id);
                                         else newSet.add(cal.id);
                                         setSelectedCalendarIds(newSet);
                                     }} className="w-4 h-4 text-primary bg-secondary border-border rounded focus:ring-ring"/>
-                                    <span>{cal.summary}</span>
+                                    <span className="text-sm">{cal.summary}</span>
                                 </label>
                             ))}
                         </div>
@@ -289,42 +288,57 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
             </div>
             
             {/* Search Panel */}
-            <div className="max-w-4xl mx-auto bg-card p-6 rounded-lg border border-border shadow-sm space-y-4">
+            <div className="bg-card p-6 rounded-2xl border border-border shadow-lg space-y-4">
                 <div className="flex space-x-2">
-                    <input type="text" value={aiQuery} onChange={e => setAiQuery(e.target.value)} placeholder="Usa l'IA: 'Riunioni team settimana prossima'..." className="bg-input border border-border text-foreground text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-3" onKeyDown={e => e.key === 'Enter' && handleAiAutoFill()}/>
-                    <button onClick={handleAiAutoFill} disabled={isSearching} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold p-3 rounded-lg"><SparklesIcon className="w-5 h-5" /></button>
+                    <input type="text" value={aiQuery} onChange={e => setAiQuery(e.target.value)} placeholder="Usa l'IA: 'Lezioni del lunedì' o 'Tutti gli eventi in palestra'..." className="bg-input border border-border text-foreground text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block w-full p-4" onKeyDown={e => e.key === 'Enter' && handleAiAutoFill()}/>
+                    <button onClick={handleAiAutoFill} disabled={isSearching} className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold p-4 rounded-xl transition-all shadow-lg shadow-indigo-500/20"><SparklesIcon className="w-5 h-5" /></button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-border">
-                    <input type="date" value={manualFilters.startDate} onChange={e => setManualFilters(f => ({...f, startDate: e.target.value}))} className="bg-input border border-border text-foreground text-sm rounded-lg p-2.5"/>
-                    <input type="date" value={manualFilters.endDate} onChange={e => setManualFilters(f => ({...f, endDate: e.target.value}))} className="bg-input border border-border text-foreground text-sm rounded-lg p-2.5"/>
-                    <input type="text" placeholder="Oggetto/Testo..." value={manualFilters.text} onChange={e => setManualFilters(f => ({...f, text: e.target.value}))} className="bg-input border border-border text-foreground text-sm rounded-lg p-2.5 lg:col-span-2"/>
+                    <input type="date" value={manualFilters.startDate} onChange={e => setManualFilters(f => ({...f, startDate: e.target.value}))} className="bg-input border border-border text-foreground text-sm rounded-xl p-3"/>
+                    <input type="date" value={manualFilters.endDate} onChange={e => setManualFilters(f => ({...f, endDate: e.target.value}))} className="bg-input border border-border text-foreground text-sm rounded-xl p-3"/>
+                    <input type="text" placeholder="Cerca nel testo..." value={manualFilters.text} onChange={e => setManualFilters(f => ({...f, text: e.target.value}))} className="bg-input border border-border text-foreground text-sm rounded-xl p-3 lg:col-span-2"/>
                 </div>
                 <div className="text-right">
-                    <button onClick={() => executeSearch(manualFilters)} disabled={isSearching} className="bg-secondary hover:bg-muted text-secondary-foreground font-bold py-2 px-6 rounded-lg inline-flex items-center space-x-2 transition-all">
+                    <button onClick={() => executeSearch(manualFilters)} disabled={isSearching} className="bg-secondary hover:bg-muted text-secondary-foreground font-bold py-3 px-8 rounded-xl inline-flex items-center space-x-2 transition-all">
                         {isSearching ? <Loader className="h-5 w-5"/> : <SearchIcon className="h-5 w-5" />}
                         <span>Cerca Eventi</span>
                     </button>
                 </div>
             </div>
 
-            {/* Massive Edit Form - Only visible when events are selected */}
+            {/* Massive Edit Form */}
             {selectedEventIds.size > 0 && (
-                <div className="max-w-4xl mx-auto bg-indigo-500/5 border border-indigo-500/20 p-6 rounded-lg shadow-lg animate-fade-in-down">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-bold text-indigo-400">Modifiche Rapide ({selectedEventIds.size} selezionati)</h3>
-                        <button onClick={() => setSelectedEventIds(new Set())} className="p-1 hover:bg-indigo-500/10 rounded-full"><XIcon className="h-5 w-5"/></button>
+                <div className="bg-indigo-500/5 border border-indigo-500/20 p-8 rounded-2xl shadow-2xl animate-fade-in-down">
+                    <div className="flex justify-between items-center mb-6">
+                        <div className="flex items-center space-x-3 text-indigo-400">
+                             <PencilLineIcon className="h-6 w-6"/>
+                             <h3 className="text-xl font-bold">Modifiche Rapide ({selectedEventIds.size} selezionati)</h3>
+                        </div>
+                        <button onClick={() => setSelectedEventIds(new Set())} className="p-2 hover:bg-indigo-500/10 rounded-full transition-colors"><XIcon className="h-6 w-6"/></button>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <input type="text" placeholder="Nuovo Oggetto..." value={bulkUpdates.summary} onChange={e => setBulkUpdates(b => ({...b, summary: e.target.value}))} className="bg-input border border-border text-sm rounded-lg p-2.5"/>
-                        <input type="text" placeholder="Nuovo Luogo..." value={bulkUpdates.location} onChange={e => setBulkUpdates(b => ({...b, location: e.target.value}))} className="bg-input border border-border text-sm rounded-lg p-2.5"/>
-                        <input type="text" placeholder="Nuova Descrizione..." value={bulkUpdates.description} onChange={e => setBulkUpdates(b => ({...b, description: e.target.value}))} className="bg-input border border-border text-sm rounded-lg p-2.5"/>
-                        <div className="flex space-x-2">
-                             <input type="number" placeholder="Nuova Durata (min)..." value={bulkUpdates.duration} onChange={e => setBulkUpdates(b => ({...b, duration: e.target.value}))} className="bg-input border border-border text-sm rounded-lg p-2.5 w-full"/>
-                             <ClockIcon className="w-5 h-5 text-indigo-400 self-center"/>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">Oggetto</label>
+                            <input type="text" placeholder="Nuovo titolo..." value={bulkUpdates.summary} onChange={e => setBulkUpdates(b => ({...b, summary: e.target.value}))} className="bg-input border border-border text-sm rounded-xl p-3.5 w-full focus:ring-indigo-500"/>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">Luogo</label>
+                            <input type="text" placeholder="Nuovo luogo..." value={bulkUpdates.location} onChange={e => setBulkUpdates(b => ({...b, location: e.target.value}))} className="bg-input border border-border text-sm rounded-xl p-3.5 w-full focus:ring-indigo-500"/>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">Descrizione</label>
+                            <input type="text" placeholder="Nuova descrizione..." value={bulkUpdates.description} onChange={e => setBulkUpdates(b => ({...b, description: e.target.value}))} className="bg-input border border-border text-sm rounded-xl p-3.5 w-full focus:ring-indigo-500"/>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">Durata (minuti)</label>
+                            <div className="flex space-x-2">
+                                 <input type="number" placeholder="Es: 60" value={bulkUpdates.duration} onChange={e => setBulkUpdates(b => ({...b, duration: e.target.value}))} className="bg-input border border-border text-sm rounded-xl p-3.5 w-full focus:ring-indigo-500"/>
+                                 <div className="bg-indigo-500/10 p-3.5 rounded-xl"><ClockIcon className="w-5 h-5 text-indigo-400"/></div>
+                            </div>
                         </div>
                     </div>
-                    <div className="mt-6 text-center">
-                        <button onClick={handleUpdateSelected} disabled={isUpdating} className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-10 rounded-full shadow-xl shadow-indigo-500/20 flex items-center justify-center space-x-2 mx-auto transition-all">
+                    <div className="mt-8 text-center">
+                        <button onClick={handleUpdateSelected} disabled={isUpdating} className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-4 px-12 rounded-full shadow-2xl shadow-indigo-500/40 flex items-center justify-center space-x-3 mx-auto transition-all transform hover:scale-105 active:scale-95">
                             {isUpdating ? <Loader className="h-5 w-5"/> : <PencilLineIcon className="h-5 w-5" />}
                             <span>{isUpdating ? `Aggiornamento in corso...` : `Applica Modifiche`}</span>
                         </button>
@@ -333,40 +347,38 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
             )}
 
             {/* Results Table */}
-            <div className="max-w-4xl mx-auto">
-                {searchPerformed && !isSearching && events.length > 0 && (
-                    <div className="animate-fade-in">
-                        <div className="bg-card border border-border rounded-lg overflow-hidden">
-                            <div className="grid grid-cols-[auto,2fr,1fr,1fr] gap-4 px-4 py-2 bg-secondary text-xs font-medium text-muted-foreground uppercase items-center">
-                                <input type="checkbox" checked={selectedEventIds.size === events.length} onChange={handleSelectAll} className="w-4 h-4 text-primary bg-secondary border-border rounded focus:ring-ring"/>
-                                <div>Dettaglio Evento</div>
-                                <div>Data e Ora</div>
-                                <div>Luogo</div>
-                            </div>
-                            <div className="max-h-[50vh] overflow-y-auto">
-                                {events.map(event => (
-                                    <div key={event.id} className="grid grid-cols-[auto,2fr,1fr,1fr] gap-4 px-4 py-3 border-t border-border items-center hover:bg-accent transition-colors text-sm">
-                                        <input type="checkbox" checked={selectedEventIds.has(event.id)} onChange={() => {
-                                            const newSet = new Set(selectedEventIds);
-                                            if (newSet.has(event.id)) newSet.delete(event.id);
-                                            else newSet.add(event.id);
-                                            setSelectedEventIds(newSet);
-                                        }} className="w-4 h-4 text-primary bg-secondary border-border rounded focus:ring-ring"/>
-                                        <div>
-                                            <p className="font-semibold truncate">{event.summary}</p>
-                                            <p className="text-xs text-muted-foreground truncate opacity-70">{event.description || 'Nessuna descrizione'}</p>
-                                        </div>
-                                        <div className="text-muted-foreground">
-                                            {new Date(event.start.dateTime || event.start.date || '').toLocaleString('it-IT', {day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'})}
-                                        </div>
-                                        <div className="text-muted-foreground truncate">{event.location || 'N/D'}</div>
+            {searchPerformed && !isSearching && events.length > 0 && (
+                <div className="animate-fade-in pb-12">
+                    <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-xl">
+                        <div className="grid grid-cols-[auto,2fr,1fr,1fr] gap-4 px-6 py-4 bg-secondary/50 text-xs font-bold text-muted-foreground uppercase tracking-widest items-center">
+                            <input type="checkbox" checked={selectedEventIds.size === events.length} onChange={handleSelectAll} className="w-5 h-5 text-indigo-500 bg-secondary border-border rounded focus:ring-indigo-500"/>
+                            <div>Evento</div>
+                            <div>Data e Ora</div>
+                            <div>Luogo</div>
+                        </div>
+                        <div className="max-h-[60vh] overflow-y-auto divide-y divide-border">
+                            {events.map(event => (
+                                <div key={event.id} className="grid grid-cols-[auto,2fr,1fr,1fr] gap-4 px-6 py-5 items-center hover:bg-accent/40 transition-colors text-sm group">
+                                    <input type="checkbox" checked={selectedEventIds.has(event.id)} onChange={() => {
+                                        const newSet = new Set(selectedEventIds);
+                                        if (newSet.has(event.id)) newSet.delete(event.id);
+                                        else newSet.add(event.id);
+                                        setSelectedEventIds(newSet);
+                                    }} className="w-5 h-5 text-indigo-500 bg-secondary border-border rounded focus:ring-indigo-500"/>
+                                    <div>
+                                        <p className="font-bold text-foreground group-hover:text-indigo-400 transition-colors">{event.summary}</p>
+                                        <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{event.description || 'Nessuna descrizione'}</p>
                                     </div>
-                                ))}
-                            </div>
+                                    <div className="text-muted-foreground font-medium">
+                                        {new Date(event.start.dateTime || event.start.date || '').toLocaleString('it-IT', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'})}
+                                    </div>
+                                    <div className="text-muted-foreground italic truncate">{event.location || '—'}</div>
+                                </div>
+                            ))}
                         </div>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
         </div>
     );
 };
