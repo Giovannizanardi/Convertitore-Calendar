@@ -13,8 +13,9 @@ export interface FilterParams {
     location: string;
 }
 
+// FIX: Always obtain the API key exclusively from process.env.API_KEY as per guidelines.
+// This also fixes the TypeScript error where import.meta.env was not recognized.
 const getAiClient = () => {
-    // La chiave viene letta direttamente dalle variabili d'ambiente (es. Vercel)
     return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
@@ -62,10 +63,12 @@ async function fileToBase64(file: File): Promise<string> {
 }
 
 export async function extractEvents(input: string | File): Promise<ApiEventObject[]> {
+    // FIX: Instantiate GoogleGenAI right before the API call.
     const ai = getAiClient();
     const extractionPrompt = getExtractionPrompt();
     let contents: Part[] = [];
-    let modelName = 'gemini-3-flash-preview';
+    // FIX: Use gemini-3-pro-preview for complex extraction tasks involving advanced reasoning and multimodal inputs.
+    let modelName = 'gemini-3-pro-preview';
     let config: GenerateContentParameters['config'] = {
         responseMimeType: "application/json",
         responseSchema: {
@@ -82,7 +85,6 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
         const multimodalMimeTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf'];
 
         if (multimodalMimeTypes.includes(mimeType)) {
-            modelName = 'gemini-3-flash-preview';
             contents = [
                 { text: extractionPrompt },
                 {
@@ -107,11 +109,9 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
             config: config,
         });
 
-        let jsonStr = response.text?.trim();
+        // FIX: Access .text property directly (do not call as method) and handle JSON extraction.
+        const jsonStr = response.text?.trim();
         if (!jsonStr) throw new Error("La risposta dell'IA è vuota.");
-        
-        const jsonMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/);
-        if (jsonMatch && jsonMatch[1]) jsonStr = jsonMatch[1];
         
         const parsedResponse = JSON.parse(jsonStr);
         if (!Array.isArray(parsedResponse)) throw new Error("Formato JSON non valido.");
@@ -123,6 +123,7 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
 }
 
 export async function suggestCorrection(event: EventObject, field: keyof Omit<EventObject, 'id'>): Promise<string | undefined> {
+    // FIX: Instantiate GoogleGenAI right before the API call.
     const ai = getAiClient();
     const prompt = `Suggerisci un valore corretto per il campo "${field}" dell'evento "${event.subject}". Valore attuale: "${event[String(field) as keyof EventObject]}". Rispondi solo col valore corretto.`;
 
@@ -139,6 +140,7 @@ export async function suggestCorrection(event: EventObject, field: keyof Omit<Ev
 }
 
 export async function parseFilterFromQuery(query: string): Promise<FilterParams> {
+    // FIX: Instantiate GoogleGenAI right before the API call.
     const ai = getAiClient();
     const currentYear = new Date().getFullYear();
     const prompt = `Analizza la query: "${query}". Estrai parametri filtro JSON (startDate, endDate, startTime, text, location). Anno corrente: ${currentYear}.`;
@@ -153,7 +155,7 @@ export async function parseFilterFromQuery(query: string): Promise<FilterParams>
             location: { type: Type.STRING },
         },
         required: [],
-        propertyOrdering: ['startDate', 'endDate', 'startTime', 'text', 'location'] as string[]
+        propertyOrdering: ['startDate', 'endDate', 'startTime', 'text', 'location']
     };
 
     try {
@@ -166,6 +168,7 @@ export async function parseFilterFromQuery(query: string): Promise<FilterParams>
             },
         });
 
+        // FIX: Access .text property directly (do not call as method).
         const jsonStr = response.text?.trim() || '{}';
         const parsedResponse = JSON.parse(jsonStr);
         return {
