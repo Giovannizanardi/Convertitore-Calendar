@@ -16,7 +16,7 @@ export interface FilterParams {
 // FIX: Always obtain the API key exclusively from process.env.API_KEY as per guidelines.
 // This also fixes the TypeScript error where import.meta.env was not recognized.
 const getAiClient = () => {
-    return new GoogleGenAI({ apiKey: process.env.VITE_API_KEY });
+    return new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
 };
 
 const eventSchema = {
