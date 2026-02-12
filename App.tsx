@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { ThemeCustomizer } from './components/ThemeCustomizer';
-import rawMetadata from './metadata.json?raw'; 
 import { Dashboard } from './components/Dashboard';
 import { ImportView } from './components/ImportView';
 import { CleanupView } from './components/CleanupView';
@@ -13,19 +12,25 @@ export default function App() {
   const [page, setPage] = useState<'dashboard' | 'import' | 'cleanup' | 'massive-edit'>('dashboard');
   const [isThemeCustomizerOpen, setThemeCustomizerOpen] = useState(false);
   const [isHelpOpen, setHelpOpen] = useState(false);
-  const [appName, setAppName] = useState<string>('');
-  const [appDescription, setAppDescription] = useState<string>('');
+  const [appName, setAppName] = useState<string>('ForMa - Calendar Suite');
+  const [appDescription, setAppDescription] = useState<string>('Una suite intelligente basata su IA per popolare e pulire i tuoi calendari.');
 
   useEffect(() => {
-    try {
-      const metadata = JSON.parse(rawMetadata);
-      setAppName(metadata.name || 'ForMa Calendar Suite');
-      setAppDescription(metadata.description || 'Una suite intelligente per importare e pulire i tuoi calendari.');
-    } catch (e) {
-      console.error("Failed to parse metadata.json, using default values.", e);
-      setAppName('ForMa - Calendar Suite');
-      setAppDescription('Una suite intelligente basata su IA per popolare e pulire i tuoi calendari. Importa eventi in blocco da file e testo, o trova e rimuovi rapidamente eventi superflui con il nostro assistente.');
-    }
+    const loadMetadata = async () => {
+      try {
+        // Utilizziamo fetch per evitare problemi di risoluzione dei moduli alias (@/)
+        // o suffissi specifici di build (?raw) in ambienti browser puri.
+        const response = await fetch('./metadata.json');
+        if (!response.ok) throw new Error('Impossibile caricare metadata.json');
+        const metadata = await response.json();
+        setAppName(metadata.name || 'ForMa Calendar Suite');
+        setAppDescription(metadata.description || 'Una suite intelligente per importare e pulire i tuoi calendari.');
+      } catch (e) {
+        console.error("Errore nel caricamento di metadata.json, utilizzo dei valori predefiniti.", e);
+        // I valori predefiniti sono già impostati negli stati iniziali
+      }
+    };
+    loadMetadata();
   }, []);
 
   const renderPage = () => {
