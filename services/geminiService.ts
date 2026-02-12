@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import type { Part, GenerateContentParameters } from "@google/genai";
 import type { EventObject } from "../lib/types";
@@ -12,14 +13,9 @@ export interface FilterParams {
     location: string;
 }
 
-// FIX: Otteniamo la chiave API esclusivamente da process.env.API_KEY.
-// Se la chiave è assente, lanciamo un errore specifico che può essere gestito dalla UI.
 const getAiClient = () => {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-        throw new Error("API_KEY_MISSING");
-    }
-    return new GoogleGenAI({ apiKey });
+    // La chiave viene letta direttamente dalle variabili d'ambiente (es. Vercel)
+    return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 const eventSchema = {
@@ -96,7 +92,6 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
                     },
                 },
             ];
-            // I modelli più recenti supportano JSON anche con input multimodali
         } else if (mimeType === 'text/plain' || mimeType === 'text/csv') {
             const textContent = await input.text();
             contents = [{ text: extractionPrompt + textContent }];
@@ -122,7 +117,6 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
         if (!Array.isArray(parsedResponse)) throw new Error("Formato JSON non valido.");
         return parsedResponse as ApiEventObject[];
     } catch (error: any) {
-        if (error.message === 'API_KEY_MISSING') throw error;
         console.error("Errore GenAI:", error);
         throw error;
     }
@@ -140,7 +134,6 @@ export async function suggestCorrection(event: EventObject, field: keyof Omit<Ev
         });
         return response.text?.trim();
     } catch (error: any) {
-        if (error.message === 'API_KEY_MISSING') throw error;
         throw error;
     }
 }
@@ -183,7 +176,6 @@ export async function parseFilterFromQuery(query: string): Promise<FilterParams>
             location: parsedResponse.location || '',
         };
     } catch (error: any) {
-        if (error.message === 'API_KEY_MISSING') throw error;
         throw error;
     }
 }
