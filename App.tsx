@@ -11,14 +11,14 @@ import { SparklesIcon, GoogleIcon } from './components/Icons';
 import readmeContent from './README.md?raw';
 
 declare global {
-  // Fix: Added AIStudio interface definition to match identical global declarations 
-  // and ensure window.aistudio property uses the correct type name.
+  // Fix: Defined AIStudio interface and made window.aistudio optional to match
+  // environmental declarations and avoid "identical modifiers" error.
   interface AIStudio {
     hasSelectedApiKey: () => Promise<boolean>;
     openSelectKey: () => Promise<void>;
   }
   interface Window {
-    aistudio: AIStudio;
+    aistudio?: AIStudio;
   }
 }
 

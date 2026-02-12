@@ -8,7 +8,7 @@ import { validateEvents } from '../lib/validation';
 import type { ValidatedEvent, EventObject } from '../lib/types';
 import { GoogleCalendarImporter } from './GoogleCalendarImporter';
 import { toDDMMYYYY } from '../lib/dateUtils';
-import { ArrowLeftIcon, RefreshCwIcon, GoogleIcon } from './Icons';
+import { ArrowLeftIcon, RefreshCwIcon } from './Icons';
 
 type AppStep = 'upload' | 'preview' | 'result';
 type InputMethod = 'file' | 'text';
@@ -42,7 +42,6 @@ const loadingMessages = [
   "Analisi del contenuto in corso...",
   "Identificazione degli eventi nei dati forniti...",
   "Estrazione di date, orari e luoghi...",
-  "Strutturazione dei dati per l'anteprima...",
   "Quasi pronto, l'IA sta finalizzando l'elaborazione...",
 ];
 
