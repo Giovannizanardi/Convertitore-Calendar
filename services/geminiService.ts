@@ -15,7 +15,7 @@ export interface FilterParams {
 
 const getAiClient = () => {
 // FIX: Per Gemini API guidelines, the API key must be obtained from process.env.API_KEY. This resolves the error.
-return new GoogleGenAI({ apiKey: process.env.API_KEY });
+return new GoogleGenAI({ apiKey: process.env.VITE_API_KEY });
 };
 
 // Funzione per ottenere il modello selezionato dall'utente, con fallback al default
