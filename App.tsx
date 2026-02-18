@@ -7,12 +7,14 @@ import { ImportView } from './components/ImportView';
 import { CleanupView } from './components/CleanupView';
 import { MassiveEditView } from './components/MassiveEditView';
 import { HelpModal } from './components/HelpModal';
+import { SettingsModal } from './components/SettingsModal';
 import readmeContent from './README.md?raw';
 
 export default function App() {
   const [page, setPage] = useState<'dashboard' | 'import' | 'cleanup' | 'massive-edit'>('dashboard');
   const [isThemeCustomizerOpen, setThemeCustomizerOpen] = useState(false);
   const [isHelpOpen, setHelpOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [appName, setAppName] = useState<string>('ForMa - Calendar Suite');
   const [appDescription, setAppDescription] = useState<string>('Una suite intelligente basata su IA per popolare e pulire i tuoi calendari.');
 
@@ -55,6 +57,7 @@ export default function App() {
           showHomeButton={page !== 'dashboard'}
           onCustomizeTheme={() => setThemeCustomizerOpen(true)}
           onOpenHelp={() => setHelpOpen(true)}
+          onOpenSettings={() => setIsSettingsOpen(true)}
         />
         <main className="mt-8">
           {renderPage()}
@@ -68,6 +71,10 @@ export default function App() {
         isOpen={isHelpOpen} 
         onClose={() => setHelpOpen(false)}
         content={readmeContent}
+      />
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
     </div>
   );

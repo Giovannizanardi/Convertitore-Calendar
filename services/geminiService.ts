@@ -13,11 +13,28 @@ export interface FilterParams {
     location: string;
 }
 
-// FIX: Always obtain the API key exclusively from process.env.API_KEY as per guidelines.
-// This also fixes the TypeScript error where import.meta.env was not recognized.
+// FIX: Per guidelines, the API key must be obtained from process.env.API_KEY.
+// This change also resolves the "Property 'env' does not exist on type 'ImportMeta'" error.
 const getAiClient = () => {
-    return new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
+return new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
 };
+
+// Funzione per ottenere il modello selezionato dall'utente, con fallback al default
+function getSelectedModel(): string {
+    const defaultModel = 'gemini-3-flash-preview';
+    try {
+        const storedSettings = localStorage.getItem('forma-settings');
+        if (storedSettings) {
+            const settings = JSON.parse(storedSettings);
+            if (typeof settings.model === 'string' && settings.model) {
+                return settings.model;
+            }
+        }
+    } catch (e) {
+        console.error("Could not read model from localStorage, using default.", e);
+    }
+    return defaultModel;
+}
 
 const eventSchema = {
     type: Type.OBJECT,
@@ -63,12 +80,10 @@ async function fileToBase64(file: File): Promise<string> {
 }
 
 export async function extractEvents(input: string | File): Promise<ApiEventObject[]> {
-    // FIX: Instantiate GoogleGenAI right before the API call.
     const ai = getAiClient();
     const extractionPrompt = getExtractionPrompt();
     let contents: Part[] = [];
-    // FIX: Use gemini-3-pro-preview for complex extraction tasks involving advanced reasoning and multimodal inputs.
-    let modelName = 'gemini-3-pro-preview';
+    let modelName = getSelectedModel();
     let config: GenerateContentParameters['config'] = {
         responseMimeType: "application/json",
         responseSchema: {
@@ -109,7 +124,6 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
             config: config,
         });
 
-        // FIX: Access .text property directly (do not call as method) and handle JSON extraction.
         const jsonStr = response.text?.trim();
         if (!jsonStr) throw new Error("La risposta dell'IA è vuota.");
         
@@ -123,13 +137,12 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
 }
 
 export async function suggestCorrection(event: EventObject, field: keyof Omit<EventObject, 'id'>): Promise<string | undefined> {
-    // FIX: Instantiate GoogleGenAI right before the API call.
     const ai = getAiClient();
     const prompt = `Suggerisci un valore corretto per il campo "${field}" dell'evento "${event.subject}". Valore attuale: "${event[String(field) as keyof EventObject]}". Rispondi solo col valore corretto.`;
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+            model: getSelectedModel(),
             contents: [{text: prompt}],
             config: { responseMimeType: "text/plain" }
         });
@@ -140,7 +153,6 @@ export async function suggestCorrection(event: EventObject, field: keyof Omit<Ev
 }
 
 export async function parseFilterFromQuery(query: string): Promise<FilterParams> {
-    // FIX: Instantiate GoogleGenAI right before the API call.
     const ai = getAiClient();
     const currentYear = new Date().getFullYear();
     const prompt = `Analizza la query: "${query}". Estrai parametri filtro JSON (startDate, endDate, startTime, text, location). Anno corrente: ${currentYear}.`;
@@ -160,7 +172,7 @@ export async function parseFilterFromQuery(query: string): Promise<FilterParams>
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+            model: getSelectedModel(),
             contents: [{text: prompt}],
             config: {
                 responseMimeType: "application/json",
@@ -168,7 +180,6 @@ export async function parseFilterFromQuery(query: string): Promise<FilterParams>
             },
         });
 
-        // FIX: Access .text property directly (do not call as method).
         const jsonStr = response.text?.trim() || '{}';
         const parsedResponse = JSON.parse(jsonStr);
         return {
