@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 export const availableModels = [
     { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash (Consigliato)', description: 'Veloce ed efficiente, ideale per la maggior parte delle attività di estrazione e analisi.' },

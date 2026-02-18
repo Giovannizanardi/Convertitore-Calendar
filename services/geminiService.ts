@@ -13,10 +13,9 @@ export interface FilterParams {
     location: string;
 }
 
-// FIX: Per guidelines, the API key must be obtained from process.env.API_KEY.
-// This change also resolves the "Property 'env' does not exist on type 'ImportMeta'" error.
 const getAiClient = () => {
-return new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
+// FIX: Per Gemini API guidelines, the API key must be obtained from process.env.API_KEY. This resolves the error.
+return new GoogleGenAI({ apiKey: process.env.VITE_API_KEY });
 };
 
 // Funzione per ottenere il modello selezionato dall'utente, con fallback al default
