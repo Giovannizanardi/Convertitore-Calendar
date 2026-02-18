@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { ThemeCustomizer } from './components/ThemeCustomizer';
 import { Dashboard } from './components/Dashboard';
@@ -8,15 +8,28 @@ import { CleanupView } from './components/CleanupView';
 import { MassiveEditView } from './components/MassiveEditView';
 import { HelpModal } from './components/HelpModal';
 import readmeContent from './README.md?raw';
-import metadata from './metadata.json';
 
 export default function App() {
   const [page, setPage] = useState<'dashboard' | 'import' | 'cleanup' | 'massive-edit'>('dashboard');
   const [isThemeCustomizerOpen, setThemeCustomizerOpen] = useState(false);
   const [isHelpOpen, setHelpOpen] = useState(false);
-  
-  const appName = metadata.name || 'ForMa - Calendar Suite';
-  const appDescription = metadata.description || 'Una suite intelligente basata su IA per popolare e pulire i tuoi calendari.';
+  const [appName, setAppName] = useState<string>('ForMa - Calendar Suite');
+  const [appDescription, setAppDescription] = useState<string>('Una suite intelligente basata su IA per popolare e pulire i tuoi calendari.');
+
+  useEffect(() => {
+    const loadMetadata = async () => {
+      try {
+        const response = await fetch('./metadata.json');
+        if (!response.ok) throw new Error('Impossibile caricare metadata.json');
+        const metadata = await response.json();
+        setAppName(metadata.name || 'ForMa Calendar Suite');
+        setAppDescription(metadata.description || 'Una suite intelligente per importare e pulire i tuoi calendari.');
+      } catch (e) {
+        console.error("Errore nel caricamento di metadata.json", e);
+      }
+    };
+    loadMetadata();
+  }, []);
 
   const renderPage = () => {
     switch (page) {

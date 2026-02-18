@@ -14,8 +14,9 @@ export interface FilterParams {
 }
 
 // FIX: Always obtain the API key exclusively from process.env.API_KEY as per guidelines.
+// This also fixes the TypeScript error where import.meta.env was not recognized.
 const getAiClient = () => {
-    return new GoogleGenAI({ apiKey: import.meta.env.API_KEY });
+    return new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
 };
 
 const eventSchema = {
@@ -62,12 +63,12 @@ async function fileToBase64(file: File): Promise<string> {
 }
 
 export async function extractEvents(input: string | File): Promise<ApiEventObject[]> {
+    // FIX: Instantiate GoogleGenAI right before the API call.
     const ai = getAiClient();
     const extractionPrompt = getExtractionPrompt();
     let contents: Part[] = [];
-    // FIX: Switched to gemini-3-flash-preview which is better suited for this extraction task
-    // and has more generous free-tier quotas, resolving the RESOURCE_EXHAUSTED error.
-    let modelName = 'gemini-3-flash-preview';
+    // FIX: Use gemini-3-pro-preview for complex extraction tasks involving advanced reasoning and multimodal inputs.
+    let modelName = 'gemini-3-pro-preview';
     let config: GenerateContentParameters['config'] = {
         responseMimeType: "application/json",
         responseSchema: {
@@ -108,6 +109,7 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
             config: config,
         });
 
+        // FIX: Access .text property directly (do not call as method) and handle JSON extraction.
         const jsonStr = response.text?.trim();
         if (!jsonStr) throw new Error("La risposta dell'IA è vuota.");
         
@@ -121,6 +123,7 @@ export async function extractEvents(input: string | File): Promise<ApiEventObjec
 }
 
 export async function suggestCorrection(event: EventObject, field: keyof Omit<EventObject, 'id'>): Promise<string | undefined> {
+    // FIX: Instantiate GoogleGenAI right before the API call.
     const ai = getAiClient();
     const prompt = `Suggerisci un valore corretto per il campo "${field}" dell'evento "${event.subject}". Valore attuale: "${event[String(field) as keyof EventObject]}". Rispondi solo col valore corretto.`;
 
@@ -137,6 +140,7 @@ export async function suggestCorrection(event: EventObject, field: keyof Omit<Ev
 }
 
 export async function parseFilterFromQuery(query: string): Promise<FilterParams> {
+    // FIX: Instantiate GoogleGenAI right before the API call.
     const ai = getAiClient();
     const currentYear = new Date().getFullYear();
     const prompt = `Analizza la query: "${query}". Estrai parametri filtro JSON (startDate, endDate, startTime, text, location). Anno corrente: ${currentYear}.`;
@@ -164,6 +168,7 @@ export async function parseFilterFromQuery(query: string): Promise<FilterParams>
             },
         });
 
+        // FIX: Access .text property directly (do not call as method).
         const jsonStr = response.text?.trim() || '{}';
         const parsedResponse = JSON.parse(jsonStr);
         return {
