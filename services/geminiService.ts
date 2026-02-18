@@ -15,7 +15,7 @@ export interface FilterParams {
 
 // FIX: Always obtain the API key exclusively from process.env.API_KEY as per guidelines.
 const getAiClient = () => {
-    return new GoogleGenAI({ apiKey: import.meta.env.API_KEY });
+    return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 const eventSchema = {
