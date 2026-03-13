@@ -22,6 +22,7 @@ interface Calendar {
     id: string;
     summary: string;
     primary?: boolean;
+    timeZone?: string;
 }
 
 interface GCalError {
@@ -287,6 +288,8 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
             const event = events[i];
             // Usa la mappatura specifica per l'evento, o il primo calendario se non è impostato
             const targetCalendarId = eventCalendarMappings[event.id] || calendars[0]?.id;
+            const targetCalendar = calendars.find(c => c.id === targetCalendarId);
+            const targetTimeZone = targetCalendar?.timeZone;
             
             if (!targetCalendarId) {
                 failures.push({ event, error: "Nessun calendario selezionato per questo evento." });
@@ -294,7 +297,7 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
             }
 
             try {
-                const result = await gcal.insertEvent(targetCalendarId, event);
+                const result = await gcal.insertEvent(targetCalendarId, event, targetTimeZone);
                  if (result) {
                     successCount++;
                 } else {

@@ -134,22 +134,24 @@ export const getUserProfile = async () => {
 
 
 // Insert a new event
-export const insertEvent = async (calendarId: string, event: ValidatedEvent) => {
-    const offsetMinutes = new Date().getTimezoneOffset();
-    const offsetHours = Math.abs(Math.floor(offsetMinutes / 60));
-    const offsetMins = Math.abs(offsetMinutes % 60);
-    const sign = offsetMinutes > 0 ? '-' : '+';
-    const timeZoneOffset = `${sign}${String(offsetHours).padStart(2, '0')}:${String(offsetMins).padStart(2, '0')}`;
+export const insertEvent = async (calendarId: string, event: ValidatedEvent, timeZone?: string) => {
+    // Usa il fuso orario passato (es. quello del calendario) o quello del browser
+    const tz = timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+    // Omettendo l'offset e specificando il timeZone, Google Calendar API 
+    // interpreterà l'orario correttamente nel fuso orario specificato,
+    // gestendo automaticamente l'ora legale (DST).
     const eventResource = {
         'summary': event.subject,
         'location': event.location,
         'description': event.description,
         'start': {
-            'dateTime': `${toYYYYMMDD(event.startDate)}T${event.startTime}:00${timeZoneOffset}`,
+            'dateTime': `${toYYYYMMDD(event.startDate)}T${event.startTime}:00`,
+            'timeZone': tz
         },
         'end': {
-            'dateTime': `${toYYYYMMDD(event.endDate)}T${event.endTime}:00${timeZoneOffset}`,
+            'dateTime': `${toYYYYMMDD(event.endDate)}T${event.endTime}:00`,
+            'timeZone': tz
         },
     };
 
