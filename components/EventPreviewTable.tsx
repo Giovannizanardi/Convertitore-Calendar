@@ -21,7 +21,7 @@ const tableHeaders: { key: keyof Omit<EventObject, 'id'>; label: string }[] = [
     { key: 'endDate', label: 'Data Fine' },
     { key: 'endTime', label: 'Ora Fine' },
     { key: 'location', label: 'Luogo' },
-    { key: 'description', label: 'Descrizione' },
+    { key: 'description', label: 'Docente / Descrizione' },
 ];
 
 const FilterPanel: React.FC<{

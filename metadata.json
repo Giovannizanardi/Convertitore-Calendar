@@ -1,5 +1,8 @@
 {
   "name": "ForMa - Calendar Suite",
   "description": "Una suite intelligente basata su IA per popolare e pulire i tuoi calendari. Importa eventi in blocco da file e testo, o trova e rimuovi rapidamente eventi superflui con il nostro assistente.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

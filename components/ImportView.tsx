@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { FileUpload } from './FileUpload';
+import { DirectCsvUpload } from './DirectCsvUpload';
 import { Loader } from './Loader';
 import { extractEvents, ApiEventObject } from '../services/geminiService';
 import { EventPreviewTable } from './EventPreviewTable';
@@ -8,10 +9,10 @@ import { validateEvents } from '../lib/validation';
 import type { ValidatedEvent, EventObject } from '../lib/types';
 import { GoogleCalendarImporter } from './GoogleCalendarImporter';
 import { toDDMMYYYY } from '../lib/dateUtils';
-import { ArrowLeftIcon, RefreshCwIcon } from './Icons';
+import { ArrowLeftIcon, RefreshCwIcon, TableIcon, SparklesIcon, FileTextIcon } from './Icons';
 
 type AppStep = 'upload' | 'preview' | 'result';
-type InputMethod = 'file' | 'text';
+type InputMethod = 'csv-direct' | 'file' | 'text';
 
 interface ImportViewProps {
     setPage: (page: 'dashboard' | 'import' | 'cleanup') => void;
@@ -52,9 +53,16 @@ export const ImportView: React.FC<ImportViewProps> = ({ setPage }) => {
   const [step, setStep] = useState<AppStep>('upload');
   const [events, setEvents] = useState<ValidatedEvent[]>([]);
   const [selectedEvents, setSelectedEvents] = useState<Set<number>>(new Set());
-  const [inputMethod, setInputMethod] = useState<InputMethod>('file');
+  const [inputMethod, setInputMethod] = useState<InputMethod>('csv-direct');
   const [pastedText, setPastedText] = useState<string>('');
   const [loadingMessage, setLoadingMessage] = useState<string>(loadingMessages[0]);
+
+  const handleCsvDirectParsed = (parsedEvents: ValidatedEvent[]) => {
+    setEvents(parsedEvents);
+    setSelectedEvents(new Set());
+    setStep('preview');
+    setError('');
+  };
 
   useEffect(() => {
     let intervalId: number | undefined;
@@ -225,25 +233,33 @@ export const ImportView: React.FC<ImportViewProps> = ({ setPage }) => {
     switch (step) {
       case 'upload':
         const canProcess = (inputMethod === 'file' && files.length > 0) || (inputMethod === 'text' && pastedText.trim());
-        const tabBaseClasses = "px-4 py-2 font-semibold transition-colors duration-200 focus:outline-none rounded-t-xl";
-        const activeTabClasses = "bg-secondary text-secondary-foreground border-b-2 border-primary";
-        const inactiveTabClasses = "bg-transparent text-muted-foreground hover:text-foreground hover:bg-accent/50";
+        const tabBaseClasses = "px-4 py-2.5 font-semibold text-sm transition-all duration-200 focus:outline-none rounded-t-xl flex items-center space-x-2";
+        const activeTabClasses = "bg-card text-foreground border-b-2 border-primary shadow-sm";
+        const inactiveTabClasses = "bg-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/40";
 
         return (
           <div className="max-w-4xl mx-auto">
             <h2 className="text-xl font-bold text-foreground mb-4">1. Fornisci i dati dei tuoi eventi</h2>
             <div className="border-b border-border mb-6">
-                <div className="flex -mb-px space-x-2">
+                <div className="flex flex-wrap -mb-px gap-1">
+                    <button onClick={() => setInputMethod('csv-direct')} className={`${tabBaseClasses} ${inputMethod === 'csv-direct' ? activeTabClasses : inactiveTabClasses}`}>
+                        <TableIcon className="h-4 w-4 text-primary" />
+                        <span>CSV Diretto (Senza IA)</span>
+                    </button>
                     <button onClick={() => setInputMethod('file')} className={`${tabBaseClasses} ${inputMethod === 'file' ? activeTabClasses : inactiveTabClasses}`}>
-                        Carica File
+                        <SparklesIcon className="h-4 w-4 text-primary" />
+                        <span>Carica File (con IA)</span>
                     </button>
                     <button onClick={() => setInputMethod('text')} className={`${tabBaseClasses} ${inputMethod === 'text' ? activeTabClasses : inactiveTabClasses}`}>
-                        Incolla Testo o Immagine
+                        <FileTextIcon className="h-4 w-4 text-primary" />
+                        <span>Incolla Testo / Screenshot (con IA)</span>
                     </button>
                 </div>
             </div>
             <div className="animate-fade-in">
-              {inputMethod === 'file' ? (
+              {inputMethod === 'csv-direct' ? (
+                <DirectCsvUpload onEventsParsed={handleCsvDirectParsed} disabled={isLoading} />
+              ) : inputMethod === 'file' ? (
                 <FileUpload onFilesChange={handleFilesChange} files={files} disabled={isLoading} />
               ) : (
                 <textarea
@@ -257,14 +273,14 @@ export const ImportView: React.FC<ImportViewProps> = ({ setPage }) => {
                 />
               )}
             </div>
-            <div className="mt-10 text-center">
+            <div className="mt-8 text-center">
                 <div className="flex justify-center items-center space-x-4">
                      <button onClick={() => setPage('dashboard')} className="bg-secondary hover:bg-muted text-secondary-foreground font-bold py-3 px-8 rounded-full inline-flex items-center space-x-3 transition-all">
                        <ArrowLeftIcon className="h-5 w-5"/> <span>Indietro</span>
-                    </button>
-                    {canProcess && (
+                     </button>
+                    {inputMethod !== 'csv-direct' && canProcess && (
                         <button onClick={() => handleProcess()} disabled={isLoading} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 px-10 rounded-full shadow-lg shadow-primary/20 transform hover:scale-105 transition-all">
-                          Elabora Anteprima
+                          Elabora con IA
                         </button>
                     )}
                 </div>

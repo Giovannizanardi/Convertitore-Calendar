@@ -16,8 +16,11 @@ Trasforma qualsiasi elenco di eventi in appuntamenti pronti per il tuo calendari
 
 Scegli il metodo che preferisci:
 
--   **⬆️ Carica File**: Trascina o seleziona file `.xlsx`, `.txt`, `.pdf` e persino immagini.
--   **📋 Incolla Testo o Immagine**: Incolla direttamente il testo o uno screenshot (anche di documenti Word, Excel o PDF) nell'area apposita.
+-   **⚡ CSV Diretto (Senza IA)**: Importa all'istante un file CSV o incolla le righe senza consumare token o passare dall'IA. Il formato richiesto è:
+    `Oggetto, Data Inizio, Ora Inizio, Data Fine, Ora Fine, Luogo, Docente`
+    *(Supporta separatori `,` o `;`, date `GG-MM-AAAA` o `GG/MM/AAAA`, e include il download del modello di esempio).*
+-   **⬆️ Carica File (con IA)**: Trascina o seleziona file `.xlsx`, `.txt`, `.pdf` e persino immagini per l'estrazione automatica con intelligenza artificiale.
+-   **📋 Incolla Testo o Immagine (con IA)**: Incolla direttamente il testo libero o uno screenshot nell'area apposita.
 
 > **Nota per Word e PowerPoint**: Per i file `.docx`, `.doc`, `.pptx`, `.ppt`, è consigliabile copiare e incollare il testo direttamente nell'area di testo, oppure convertire il documento in PDF o un'immagine (screenshot) prima di caricarlo, in quanto l'app non supporta il caricamento diretto di questi formati binari.
 
