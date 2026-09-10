@@ -2,8 +2,9 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 export const availableModels = [
-    { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash (Consigliato)', description: 'Veloce ed efficiente, ideale per la maggior parte delle attività di estrazione e analisi.' },
-    { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', description: 'Modello più potente per documenti complessi o richieste che richiedono un ragionamento avanzato.' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Consigliato - Più Stabile)', description: 'Massima affidabilità e velocità, ideale per evitare picchi di sovraccarico durante l\'estrazione.' },
+    { id: 'gemini-3.8-flash', name: 'Gemini 3 Flash', description: 'Modello di ultima generazione con ottime capacità di estrazione.' },
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Modello ad alta capacità di ragionamento per documenti e tabelle molto complessi.' },
 ] as const;
 
 export type ModelId = typeof availableModels[number]['id'];
@@ -30,7 +31,7 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
         } catch (error) {
             console.error("Failed to load settings from localStorage", error);
         }
-        return 'gemini-3-flash-preview';
+        return 'gemini-2.5-flash';
     });
 
     useEffect(() => {

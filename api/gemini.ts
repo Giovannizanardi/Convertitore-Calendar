@@ -36,12 +36,60 @@ export default async function handler(req: any, res: any) {
   
   // Normalize model identifier for optimal compatibility
   const normalizeModel = (m?: string): string => {
-    if (!m) return "gemini-3.8-flash";
-    if (m === "gemini-3-flash-preview" || m === "gemini-flash") return "gemini-3.8-flash";
-    if (m === "gemini-3-pro-preview" || m === "gemini-pro") return "gemini-3.1-pro-preview";
+    if (!m) return "gemini-2.5-flash";
+    if (m === "gemini-3-flash-preview" || m === "gemini-flash" || m === "gemini-3.8-flash") return "gemini-2.5-flash";
+    if (m === "gemini-3-pro-preview" || m === "gemini-pro" || m === "gemini-3.1-pro-preview") return "gemini-2.5-pro";
     return m;
   };
-  const selectedModel = normalizeModel(model);
+  const primaryModel = normalizeModel(model);
+
+  // Model fallback chain if 503 / high demand occurs
+  const candidateModels = Array.from(
+    new Set([primaryModel, "gemini-2.5-flash", "gemini-3.8-flash", "gemini-2.5-pro"])
+  );
+
+  async function generateWithFallbackAndRetry(
+    buildRequest: (modelName: string) => { model: string; contents: any; config?: any }
+  ) {
+    let lastError: any = null;
+
+    for (const modelToTry of candidateModels) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const reqConfig = buildRequest(modelToTry);
+          const response = await ai.models.generateContent(reqConfig);
+          return response;
+        } catch (err: any) {
+          lastError = err;
+          const status = err?.status || err?.code || err?.error?.code;
+          const msg = err?.message || JSON.stringify(err);
+          const isOverloadedOrUnavailable =
+            status === 503 ||
+            status === 429 ||
+            status === 500 ||
+            msg.includes("503") ||
+            msg.includes("high demand") ||
+            msg.includes("UNAVAILABLE") ||
+            msg.includes("overloaded") ||
+            msg.includes("RESOURCE_EXHAUSTED");
+
+          if (isOverloadedOrUnavailable) {
+            console.warn(
+              `Model ${modelToTry} attempt ${attempt + 1} unavailable (${msg}). Retrying/falling back...`
+            );
+            // Brief backoff
+            await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
+            continue;
+          } else {
+            // For other non-transient errors, throw immediately
+            throw err;
+          }
+        }
+      }
+    }
+
+    throw lastError;
+  }
 
   try {
     switch (action) {
@@ -140,11 +188,11 @@ Contenuto da analizzare:
           return res.status(400).json({ error: "Nessun contenuto o file fornito per l'estrazione." });
         }
 
-        const response = await ai.models.generateContent({
-          model: selectedModel,
+        const response = await generateWithFallbackAndRetry((m) => ({
+          model: m,
           contents: { parts: contents },
           config: config,
-        });
+        }));
 
         const jsonStr = response.text?.trim();
         if (!jsonStr) {
@@ -166,11 +214,11 @@ Contenuto da analizzare:
 
         const prompt = `Suggerisci un valore corretto per il campo "${field}" dell'evento "${event.subject}". Valore attuale: "${event[field]}". Rispondi solo con il valore corretto formattato (date YYYY-MM-DD, orari HH:mm).`;
 
-        const response = await ai.models.generateContent({
-          model: selectedModel,
+        const response = await generateWithFallbackAndRetry((m) => ({
+          model: m,
           contents: [{ text: prompt }],
           config: { responseMimeType: "text/plain" },
-        });
+        }));
 
         return res.status(200).json({ success: true, data: response.text?.trim() });
       }
@@ -196,14 +244,14 @@ Contenuto da analizzare:
           propertyOrdering: ["startDate", "endDate", "startTime", "text", "location"],
         };
 
-        const response = await ai.models.generateContent({
-          model: selectedModel,
+        const response = await generateWithFallbackAndRetry((m) => ({
+          model: m,
           contents: [{ text: prompt }],
           config: {
             responseMimeType: "application/json",
             responseSchema: filterSchema,
           },
-        });
+        }));
 
         const jsonStr = response.text?.trim() || "{}";
         const parsedResponse = JSON.parse(jsonStr);
@@ -224,6 +272,18 @@ Contenuto da analizzare:
     }
   } catch (error: any) {
     console.error("Errore GenAI Server:", error);
+    const msg = error?.message || "";
+    if (
+      msg.includes("503") ||
+      msg.includes("high demand") ||
+      msg.includes("UNAVAILABLE") ||
+      msg.includes("overloaded")
+    ) {
+      return res.status(503).json({
+        error:
+          "I server di Google Gemini stanno riscontrando un picco temporaneo di traffico (503). Riprova tra pochi istanti oppure usa l'importazione 'CSV Diretto (Senza IA)' per importare immediatamente senza attendere l'IA.",
+      });
+    }
     return res.status(500).json({
       error: error.message || "Errore durante l'elaborazione della richiesta IA sul server.",
     });

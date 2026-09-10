@@ -12,7 +12,7 @@ export interface FilterParams {
 
 // Funzione per ottenere il modello selezionato dall'utente, con fallback al default
 function getSelectedModel(): string {
-  const defaultModel = "gemini-3.8-flash";
+  const defaultModel = "gemini-2.5-flash";
   try {
     const storedSettings = localStorage.getItem("forma-settings");
     if (storedSettings) {
