@@ -9,10 +9,11 @@ import { validateEvents } from '../lib/validation';
 import type { ValidatedEvent, EventObject } from '../lib/types';
 import { GoogleCalendarImporter } from './GoogleCalendarImporter';
 import { toDDMMYYYY } from '../lib/dateUtils';
-import { ArrowLeftIcon, RefreshCwIcon, TableIcon, SparklesIcon, FileTextIcon } from './Icons';
+import { ArrowLeftIcon, RefreshCwIcon, TableIcon, SparklesIcon, FileTextIcon, CameraIcon } from './Icons';
+import { CameraCaptureModal } from './CameraCaptureModal';
 
 type AppStep = 'upload' | 'preview' | 'result';
-type InputMethod = 'csv-direct' | 'file' | 'text';
+type InputMethod = 'csv-direct' | 'file' | 'camera' | 'text';
 
 interface ImportViewProps {
     setPage: (page: 'dashboard' | 'import' | 'cleanup') => void;
@@ -56,6 +57,7 @@ export const ImportView: React.FC<ImportViewProps> = ({ setPage }) => {
   const [inputMethod, setInputMethod] = useState<InputMethod>('csv-direct');
   const [pastedText, setPastedText] = useState<string>('');
   const [loadingMessage, setLoadingMessage] = useState<string>(loadingMessages[0]);
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState<boolean>(false);
 
   const handleCsvDirectParsed = (parsedEvents: ValidatedEvent[]) => {
     setEvents(parsedEvents);
@@ -79,11 +81,15 @@ export const ImportView: React.FC<ImportViewProps> = ({ setPage }) => {
 
   const handleFilesChange = useCallback((selectedFiles: File[]) => {
     setFiles(selectedFiles);
-     if (selectedFiles.length > 0) {
-      setInputMethod('file');
+    if (selectedFiles.length > 0) {
       setPastedText('');
     }
   }, []);
+
+  const handleCameraCapture = (capturedPhoto: File) => {
+    setFiles(prev => [...prev, capturedPhoto]);
+    setInputMethod('file');
+  };
   
   const handlePastedTextChange = (text: string) => {
     setPastedText(text);
@@ -91,7 +97,7 @@ export const ImportView: React.FC<ImportViewProps> = ({ setPage }) => {
         setInputMethod('text');
         setFiles([]);
     }
-  }
+  };
 
   const handlePaste = (event: React.ClipboardEvent) => {
     const items = event.clipboardData.items;
@@ -102,6 +108,7 @@ export const ImportView: React.FC<ImportViewProps> = ({ setPage }) => {
                 event.preventDefault();
                 const imageFile = new File([blob], `pasted-image-${Date.now()}.${blob.type.split('/')[1]}`, { type: blob.type });
                 handleFilesChange([imageFile]);
+                setInputMethod('file');
                 return;
             }
         }
@@ -117,9 +124,9 @@ export const ImportView: React.FC<ImportViewProps> = ({ setPage }) => {
 
     try {
         let extractedEvents: ApiEventObject[] = [];
-        if (inputMethod === 'file') {
+        if (inputMethod === 'file' || inputMethod === 'camera') {
             if (files.length === 0) {
-                setError('Seleziona prima uno o più file.');
+                setError('Seleziona prima uno o più file o acquisisci una foto.');
                 setIsLoading(false);
                 return;
             }
@@ -160,7 +167,7 @@ export const ImportView: React.FC<ImportViewProps> = ({ setPage }) => {
       setError('');
     } catch (err: any) {
         if (err.message === 'API_KEY_MISSING') {
-            setError("Chiave API mancante. Clicca su 'Seleziona Chiave API' nella schermata principale.");
+            setError("Chiave API mancante. Configura la chiave API nelle impostazioni.");
             setIsLoading(false);
             return;
         }
@@ -232,13 +239,21 @@ export const ImportView: React.FC<ImportViewProps> = ({ setPage }) => {
 
     switch (step) {
       case 'upload':
-        const canProcess = (inputMethod === 'file' && files.length > 0) || (inputMethod === 'text' && pastedText.trim());
+        const canProcess = (inputMethod === 'file' && files.length > 0) || 
+                           (inputMethod === 'camera' && files.length > 0) ||
+                           (inputMethod === 'text' && pastedText.trim());
         const tabBaseClasses = "px-4 py-2.5 font-semibold text-sm transition-all duration-200 focus:outline-none rounded-t-xl flex items-center space-x-2";
         const activeTabClasses = "bg-card text-foreground border-b-2 border-primary shadow-sm";
         const inactiveTabClasses = "bg-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/40";
 
         return (
           <div className="max-w-4xl mx-auto">
+            <CameraCaptureModal
+              isOpen={isCameraModalOpen}
+              onClose={() => setIsCameraModalOpen(false)}
+              onCapture={handleCameraCapture}
+            />
+
             <h2 className="text-xl font-bold text-foreground mb-4">1. Fornisci i dati dei tuoi eventi</h2>
             <div className="border-b border-border mb-6">
                 <div className="flex flex-wrap -mb-px gap-1">
@@ -249,6 +264,10 @@ export const ImportView: React.FC<ImportViewProps> = ({ setPage }) => {
                     <button onClick={() => setInputMethod('file')} className={`${tabBaseClasses} ${inputMethod === 'file' ? activeTabClasses : inactiveTabClasses}`}>
                         <SparklesIcon className="h-4 w-4 text-primary" />
                         <span>Carica File (con IA)</span>
+                    </button>
+                    <button onClick={() => setInputMethod('camera')} className={`${tabBaseClasses} ${inputMethod === 'camera' ? activeTabClasses : inactiveTabClasses}`}>
+                        <CameraIcon className="h-4 w-4 text-primary" />
+                        <span>Scatta Foto (Fotocamera)</span>
                     </button>
                     <button onClick={() => setInputMethod('text')} className={`${tabBaseClasses} ${inputMethod === 'text' ? activeTabClasses : inactiveTabClasses}`}>
                         <FileTextIcon className="h-4 w-4 text-primary" />
@@ -261,6 +280,37 @@ export const ImportView: React.FC<ImportViewProps> = ({ setPage }) => {
                 <DirectCsvUpload onEventsParsed={handleCsvDirectParsed} disabled={isLoading} />
               ) : inputMethod === 'file' ? (
                 <FileUpload onFilesChange={handleFilesChange} files={files} disabled={isLoading} />
+              ) : inputMethod === 'camera' ? (
+                <div className="bg-card border-2 border-dashed border-border rounded-2xl p-8 text-center space-y-5">
+                  <div className="w-16 h-16 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mx-auto">
+                    <CameraIcon className="w-8 h-8" />
+                  </div>
+                  <div className="max-w-md mx-auto space-y-2">
+                    <h3 className="text-lg font-bold text-foreground">
+                      Acquisisci un orario, locandina o documento
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Usa la fotocamera del tuo smartphone, tablet o webcam per fotografare un programma di corsi, un calendario cartaceo o una bacheca.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsCameraModalOpen(true)}
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-6 py-3 rounded-xl shadow-lg shadow-primary/20 flex items-center space-x-2 transition-transform active:scale-95"
+                    >
+                      <CameraIcon className="w-5 h-5" />
+                      <span>Apri Fotocamera e Scatta</span>
+                    </button>
+                  </div>
+
+                  {files.length > 0 && (
+                    <div className="mt-6 pt-6 border-t border-border">
+                      <FileUpload onFilesChange={handleFilesChange} files={files} disabled={isLoading} />
+                    </div>
+                  )}
+                </div>
               ) : (
                 <textarea
                     value={pastedText}
@@ -268,7 +318,7 @@ export const ImportView: React.FC<ImportViewProps> = ({ setPage }) => {
                     onPaste={handlePaste}
                     disabled={isLoading}
                     rows={8}
-                    placeholder="Incolla qui i dati o uno screenshot..."
+                    placeholder="Incolla qui i dati o uno screenshot (Ctrl+V / Cmd+V)..."
                     className="w-full bg-secondary/30 border-2 border-dashed border-border rounded-2xl p-6 text-foreground focus:border-primary focus:ring-primary transition-all disabled:opacity-50"
                 />
               )}

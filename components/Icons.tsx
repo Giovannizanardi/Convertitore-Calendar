@@ -238,3 +238,21 @@ export const FileSpreadsheetIcon: React.FC<IconProps> = (props) => (
     <path d="M14 17h2" />
   </svg>
 );
+
+export const CameraIcon: React.FC<IconProps> = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
+    <circle cx="12" cy="13" r="3"/>
+  </svg>
+);
+
+export const FlipCameraIcon: React.FC<IconProps> = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/>
+    <path d="M13 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5"/>
+    <circle cx="12" cy="12" r="3"/>
+    <path d="m18 22-3-3 3-3"/>
+    <path d="m6 2 3 3-3 3"/>
+  </svg>
+);
+
