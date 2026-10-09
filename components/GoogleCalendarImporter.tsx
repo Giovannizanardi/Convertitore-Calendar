@@ -309,6 +309,8 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
                 failures.push({ event, error: errorMessage });
             }
             setImportProgress(((i + 1) / events.length) * 100);
+            // Pacing delay per rispettare i limiti di frequenza di Google Calendar
+            await new Promise(r => setTimeout(r, 60));
         }
 
         setImportResult({ successCount, failures });

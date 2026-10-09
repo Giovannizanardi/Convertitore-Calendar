@@ -29,6 +29,7 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
     const [manualFilters, setManualFilters] = useState<FilterParams>({ startDate: '', endDate: '', startTime: '', text: '', location: '' });
     const [isSearching, setIsSearching] = useState(false);
     const [searchPerformed, setSearchPerformed] = useState(false);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
     
     const [bulkUpdates, setBulkUpdates] = useState({
         summary: '',
@@ -188,10 +189,12 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
         setIsUpdating(true);
         setUpdateProgress({ current: 0, total: totalToUpdate });
         setError(null);
+        setSuccessMessage(null);
 
         const selectedEvents = events.filter(e => selectedEventIds.has(e.id));
-        const BATCH_SIZE = 5;
+        const CONCURRENCY = 3;
         const failedUpdates: any[] = [];
+        let completedCount = 0;
 
         // Helper per formattare la data con il nuovo orario preservando la data originale
         const applyTimeToDate = (originalDateTime: string, newTime: string) => {
@@ -201,53 +204,63 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
             return date.toISOString();
         };
 
+        const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
         try {
-            for (let i = 0; i < selectedEvents.length; i += BATCH_SIZE) {
-                const batch = selectedEvents.slice(i, i + BATCH_SIZE);
-                
-                await Promise.allSettled(
-                    batch.map(async (event) => {
-                        const resource: any = {};
-                        if (bulkUpdates.summary) resource.summary = bulkUpdates.summary;
-                        if (bulkUpdates.location) resource.location = bulkUpdates.location;
-                        if (bulkUpdates.description) resource.description = bulkUpdates.description;
-                        
-                        const currentStart = event.start.dateTime || event.start.date || '';
-                        const currentEnd = event.end.dateTime || event.end.date || '';
+            let nextIndex = 0;
 
-                        if (bulkUpdates.startTime) {
-                            resource.start = { dateTime: applyTimeToDate(currentStart, bulkUpdates.startTime) };
-                        }
+            const runWorker = async () => {
+                while (nextIndex < selectedEvents.length) {
+                    const currentIndex = nextIndex++;
+                    const event = selectedEvents[currentIndex];
+                    if (!event) break;
 
-                        if (bulkUpdates.endTime) {
-                            resource.end = { dateTime: applyTimeToDate(currentEnd, bulkUpdates.endTime) };
-                        }
-                        
-                        if (bulkUpdates.duration) {
-                            const minutes = parseInt(bulkUpdates.duration);
-                            if (!isNaN(minutes)) {
-                                // Se startTime è stato cambiato in questo batch, usa quello come riferimento
-                                const startRef = bulkUpdates.startTime 
-                                    ? applyTimeToDate(currentStart, bulkUpdates.startTime)
-                                    : currentStart;
-                                
-                                const start = new Date(startRef);
-                                const newEnd = new Date(start.getTime() + minutes * 60000);
-                                resource.end = { dateTime: newEnd.toISOString() };
-                            }
-                        }
+                    const resource: any = {};
+                    if (bulkUpdates.summary) resource.summary = bulkUpdates.summary;
+                    if (bulkUpdates.location) resource.location = bulkUpdates.location;
+                    if (bulkUpdates.description) resource.description = bulkUpdates.description;
+                    
+                    const currentStart = event.start.dateTime || event.start.date || '';
+                    const currentEnd = event.end.dateTime || event.end.date || '';
 
-                        try {
-                            await gcal.patchEvent(event.calendarId, event.id, resource);
-                        } catch (e: any) {
-                            failedUpdates.push({ event, error: e.message });
-                        }
-                    })
-                );
+                    if (bulkUpdates.startTime) {
+                        resource.start = { dateTime: applyTimeToDate(currentStart, bulkUpdates.startTime) };
+                    }
 
-                setUpdateProgress({ current: Math.min(i + BATCH_SIZE, totalToUpdate), total: totalToUpdate });
-                if (i + BATCH_SIZE < selectedEvents.length) await new Promise(r => setTimeout(r, 500));
-            }
+                    if (bulkUpdates.endTime) {
+                        resource.end = { dateTime: applyTimeToDate(currentEnd, bulkUpdates.endTime) };
+                    }
+                    
+                    if (bulkUpdates.duration) {
+                        const minutes = parseInt(bulkUpdates.duration);
+                        if (!isNaN(minutes)) {
+                            const startRef = bulkUpdates.startTime 
+                                ? applyTimeToDate(currentStart, bulkUpdates.startTime)
+                                : currentStart;
+                            
+                            const start = new Date(startRef);
+                            const newEnd = new Date(start.getTime() + minutes * 60000);
+                            resource.end = { dateTime: newEnd.toISOString() };
+                        }
+                    }
+
+                    try {
+                        await gcal.patchEvent(event.calendarId, event.id, resource);
+                    } catch (e: any) {
+                        console.error(`Failed to update event ${event.id}:`, e);
+                        failedUpdates.push({ event, error: e.message });
+                    } finally {
+                        completedCount++;
+                        setUpdateProgress({ current: completedCount, total: totalToUpdate });
+                    }
+
+                    await sleep(60);
+                }
+            };
+
+            const workerCount = Math.min(CONCURRENCY, selectedEvents.length);
+            const workers = Array.from({ length: workerCount }, () => runWorker());
+            await Promise.all(workers);
         } catch (e: any) {
             setError({ title: 'Errore Critico', message: "Errore durante l'aggiornamento in blocco." });
         } finally {
@@ -257,10 +270,11 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
             if (failedUpdates.length > 0) {
                 setError({ 
                     title: 'Modifica Parziale', 
-                    message: `${failedUpdates.length} eventi su ${totalToUpdate} non sono stati aggiornati.` 
+                    message: `${failedUpdates.length} eventi su ${totalToUpdate} non sono stati aggiornati. Clicca sui rimanenti per riprovare.` 
                 });
+                setSelectedEventIds(new Set(failedUpdates.map(f => f.event.id)));
             } else {
-                alert("Aggiornamento completato con successo!");
+                setSuccessMessage(`${totalToUpdate} eventi aggiornati con successo!`);
                 setBulkUpdates({ summary: '', location: '', description: '', startTime: '', endTime: '', duration: '' });
                 setSelectedEventIds(new Set());
                 executeSearch(manualFilters); 
@@ -307,6 +321,19 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
                         <p className="text-sm">{error.message}</p>
                     </div>
                     <button onClick={() => setError(null)} className="p-1 hover:bg-destructive/10 rounded-full">
+                        <XIcon className="h-5 w-5" />
+                    </button>
+                </div>
+            )}
+
+            {/* Success Message */}
+            {successMessage && (
+                <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 p-4 rounded-xl flex justify-between items-center animate-fade-in">
+                    <div className="flex items-center space-x-2">
+                        <CheckCircleIcon className="w-5 h-5 flex-shrink-0" />
+                        <span className="font-medium text-sm">{successMessage}</span>
+                    </div>
+                    <button onClick={() => setSuccessMessage(null)} className="p-1 hover:bg-emerald-500/20 rounded-full transition-colors">
                         <XIcon className="h-5 w-5" />
                     </button>
                 </div>

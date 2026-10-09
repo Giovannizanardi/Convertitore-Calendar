@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as gcal from '../services/googleCalendarService';
 import { Loader } from './Loader';
-import { GoogleIcon, SearchIcon, Trash2Icon, SparklesIcon, CalendarIcon, ChevronsUpDownIcon, ArrowLeftIcon, XIcon } from './Icons';
+import { GoogleIcon, SearchIcon, Trash2Icon, SparklesIcon, CalendarIcon, ChevronsUpDownIcon, ArrowLeftIcon, XIcon, RefreshCwIcon } from './Icons';
 import { parseFilterFromQuery, FilterParams } from '../services/geminiService';
 
 type GCalState = 'initial' | 'authenticating' | 'authenticated' | 'loading' | 'error';
@@ -227,57 +227,60 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
         setError(null);
 
         const eventsToDelete = events.filter(e => selectedEventIds.has(e.id));
-        const BATCH_SIZE = 10;
-        const failedDeletions: any[] = [];
+        // Concorrenza controllata (3 richieste simultanee) per rimanere sempre entro i limiti di frequenza di Google Calendar
+        const CONCURRENCY = 3;
+        const failedDeletions: { event: EventWithCalendarId; error: any }[] = [];
         const successfulIds = new Set<string>();
+        let completedCount = 0;
 
-        // Helper to wait
-        const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+        const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
         try {
-            for (let i = 0; i < eventsToDelete.length; i += BATCH_SIZE) {
-                const batch = eventsToDelete.slice(i, i + BATCH_SIZE);
-                
-                // Execute batch in parallel and wait for all to settle
-                const results = await Promise.allSettled(
-                    batch.map(e => gcal.deleteEvent(e.calendarId, e.id))
-                );
+            let nextIndex = 0;
 
-                results.forEach((result, index) => {
-                    const event = batch[index];
-                    if (result.status === 'fulfilled') {
+            const runWorker = async () => {
+                while (nextIndex < eventsToDelete.length) {
+                    const currentIndex = nextIndex++;
+                    const event = eventsToDelete[currentIndex];
+                    if (!event) break;
+
+                    try {
+                        await gcal.deleteEvent(event.calendarId, event.id);
                         successfulIds.add(event.id);
-                    } else {
-                        console.error(`Failed to delete event ${event.id}:`, result.reason);
-                        failedDeletions.push({ event, error: result.reason });
+                    } catch (err: any) {
+                        console.error(`Failed to delete event ${event.id}:`, err);
+                        failedDeletions.push({ event, error: err });
+                    } finally {
+                        completedCount++;
+                        setDeletionProgress({ current: completedCount, total: totalToDelete });
                     }
-                });
 
-                // Update progress
-                setDeletionProgress({ current: Math.min(i + BATCH_SIZE, totalToDelete), total: totalToDelete });
-
-                // Add delay if not the last batch to be gentle with the API
-                if (i + BATCH_SIZE < eventsToDelete.length) {
-                    await delay(500); // 500ms delay between batches
+                    // Pacing intervallo leggero tra una richiesta e l'altra per non saturare l'API
+                    await sleep(60);
                 }
-            }
+            };
+
+            const workerCount = Math.min(CONCURRENCY, eventsToDelete.length);
+            const workers = Array.from({ length: workerCount }, () => runWorker());
+            await Promise.all(workers);
         } catch (e: any) {
             console.error("Critical error during batch deletion:", e);
              setError({ 
                 title: 'Errore Critico', 
-                message: "Si è verificato un errore imprevisto durante l'elaborazione dei lotti." 
+                message: "Si è verificato un errore imprevisto durante l'eliminazione." 
             });
         } finally {
-            // Update the events list to remove successful deletions
+            // Rimuove gli eventi eliminati con successo dall'elenco
             setEvents(prev => prev.filter(e => !successfulIds.has(e.id)));
             
             if (failedDeletions.length > 0) {
                 console.error("Summary of failed deletions:", failedDeletions);
+                const isRateLimit = failedDeletions.some(f => gcal.isRateLimitError(f.error));
                 setError({ 
                     title: 'Eliminazione Parziale', 
-                    message: `${failedDeletions.length} eventi su ${totalToDelete} non sono stati eliminati. Potresti aver raggiunto il limite di richieste API o gli eventi potrebbero essere stati spostati.` 
+                    message: `${failedDeletions.length} eventi su ${totalToDelete} non sono stati eliminati (${successfulIds.size} eliminati con successo). ${isRateLimit ? 'Il server Google era temporaneamente occupato. Clicca su "Riprova sui rimanenti" per completare.' : 'Gli eventi potrebbero essere già stati rimossi o spostati.'}` 
                 });
-                // Update selection to only contain failed items so user can try again easily
+                // Mantiene selezionati solo gli eventi falliti per riprovare con un click
                 setSelectedEventIds(new Set(failedDeletions.map(f => f.event.id)));
             } else {
                 setSelectedEventIds(new Set());
@@ -358,6 +361,17 @@ export const CleanupView: React.FC<CleanupViewProps> = ({ setPage }) => {
                     <div>
                         <strong className="font-bold">{error.title}: </strong>
                         <span className="block sm:inline">{error.message}</span>
+                        {selectedEventIds.size > 0 && !isDeleting && (
+                            <div className="mt-2.5">
+                                <button
+                                    onClick={handleDeleteSelected}
+                                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold px-3 py-1.5 rounded-md text-xs transition-colors inline-flex items-center space-x-1.5 shadow-xs"
+                                >
+                                    <RefreshCwIcon className="w-3.5 h-3.5" />
+                                    <span>Riprova sui rimanenti ({selectedEventIds.size})</span>
+                                </button>
+                            </div>
+                        )}
                     </div>
                     <button onClick={() => setError(null)} className="ml-4 p-1 rounded hover:bg-destructive/20 transition-colors">
                         <XIcon className="h-5 w-5" />
