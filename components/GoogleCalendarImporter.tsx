@@ -46,42 +46,13 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
     // Rimosso `selectedCalendarId` in quanto non più usato.
     const [eventCalendarMappings, setEventCalendarMappings] = useState<Record<number, string>>({}); // Mapping for individual events
     const [importProgress, setImportProgress] = useState(0);
-    const [user, setUser] = useState<{ email: string } | null>(null);
+    const [user, setUser] = useState<gcal.UserProfile | null>(null);
     const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
     // Nuovi stati per la selezione multipla e l'assegnazione in blocco
     const [selectedEventsForBulkAssignment, setSelectedEventsForBulkAssignment] = useState<Set<number>>(new Set());
     const [selectedCalendarForBulkAssign, setSelectedCalendarForBulkAssign] = useState('');
 
-
-    const handleGapiLoad = useCallback(async () => {
-        try {
-            await gcal.initGapiClient();
-        } catch (error: any) {
-            console.error("GAPI Init Error:", error);
-            setGCalState('error');
-            setGCalError({
-                title: 'Errore di Inizializzazione',
-                message: `Impossibile caricare i componenti principali di Google. Controlla la tua connessione e riprova. Dettagli: ${error.message}`
-            });
-        }
-    }, []);
-
-    useEffect(() => {
-        const script = document.createElement('script');
-        script.src = 'https://apis.google.com/js/api.js';
-        script.onload = () => window.gapi.load('client', handleGapiLoad);
-        script.async = true;
-        script.defer = true;
-        document.body.appendChild(script);
-
-        return () => {
-            if (document.body.contains(script)) {
-                 document.body.removeChild(script);
-            }
-        };
-    }, [handleGapiLoad]);
-    
     const fetchCalendars = useCallback(async () => {
         try {
             const calendarList = await gcal.listCalendars();
@@ -101,6 +72,66 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
             });
         }
     }, []); 
+
+    const handleGapiLoad = useCallback(async () => {
+        try {
+            await gcal.initGapiClient();
+            if (gcal.hasValidSession()) {
+                const storedUser = gcal.getStoredUserProfile();
+                if (storedUser) setUser(storedUser);
+                setGCalState('authenticating');
+                await fetchCalendars();
+                if (!storedUser) {
+                    const prof = await gcal.getUserProfile();
+                    if (prof?.result) setUser(prof.result);
+                }
+                setGCalState('authenticated');
+            }
+        } catch (error: any) {
+            console.error("GAPI Init Error:", error);
+            setGCalState('error');
+            setGCalError({
+                title: 'Errore di Inizializzazione',
+                message: `Impossibile caricare i componenti principali di Google. Controlla la tua connessione e riprova. Dettagli: ${error.message}`
+            });
+        }
+    }, [fetchCalendars]);
+
+    useEffect(() => {
+        if ((window as any).gapi?.client) {
+            handleGapiLoad();
+            return;
+        }
+        if ((window as any).gapi) {
+            (window as any).gapi.load('client', handleGapiLoad);
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://apis.google.com/js/api.js';
+        script.onload = () => (window as any).gapi?.load('client', handleGapiLoad);
+        script.async = true;
+        script.defer = true;
+        document.body.appendChild(script);
+
+        return () => {
+            if (document.body.contains(script)) {
+                 document.body.removeChild(script);
+            }
+        };
+    }, [handleGapiLoad]);
+
+    // Ascolta i cambiamenti di sessione
+    useEffect(() => {
+        const handleSessionChange = () => {
+            if (!gcal.hasValidSession()) {
+                setUser(null);
+                setCalendars([]);
+                setGCalState('initial');
+            }
+        };
+        window.addEventListener('forma_gcal_session_change', handleSessionChange);
+        return () => window.removeEventListener('forma_gcal_session_change', handleSessionChange);
+    }, []);
 
     const handleTokenResponse = useCallback(async (tokenResponse: any, isSilent: boolean) => {
         setGCalError(null); 
@@ -133,7 +164,8 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
         }
 
         if (tokenResponse.access_token) {
-            window.gapi.client.setToken(tokenResponse);
+            gcal.saveTokenSession(tokenResponse);
+            (window as any).gapi?.client?.setToken(tokenResponse);
             
             try {
                 const userInfoResponse = await gcal.getUserProfile();
@@ -177,7 +209,30 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
     };
 
     useEffect(() => {
-        if (view !== 'gcal' || gcalState !== 'initial') return;
+        if (view !== 'gcal') return;
+
+        // Se l'utente ha già una sessione valida in memoria, caricala subito
+        if (gcal.hasValidSession()) {
+            if (gcalState !== 'authenticated') {
+                const storedUser = gcal.getStoredUserProfile();
+                if (storedUser) setUser(storedUser);
+                setGCalState('authenticating');
+                gcal.initGapiClient().then(async () => {
+                    await fetchCalendars();
+                    if (!storedUser) {
+                        const prof = await gcal.getUserProfile();
+                        if (prof?.result) setUser(prof.result);
+                    }
+                    setGCalState('authenticated');
+                }).catch((e) => {
+                    console.error("Error restoring session:", e);
+                    setGCalState('initial');
+                });
+            }
+            return;
+        }
+
+        if (gcalState !== 'initial') return;
 
         setGCalState('authenticating');
         
@@ -191,7 +246,7 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
             }
         };
         setTimeout(trySilentLogin, 100);
-    }, [view, gcalState, handleTokenResponse]);
+    }, [view, gcalState, handleTokenResponse, fetchCalendars]);
 
     const handleDownloadCsv = () => {
         const csvContent = generateCsvContent(events);
@@ -421,14 +476,23 @@ export const GoogleCalendarImporter: React.FC<GoogleCalendarImporterProps> = ({ 
                     <div className="max-w-2xl mx-auto animate-fade-in">
                         <div className="flex justify-between items-center mb-4">
                             <p className="text-muted-foreground">Accesso effettuato come <span className="font-semibold text-foreground">{user?.email}</span></p>
-                            <button
-                                onClick={handleSwitchAccount}
-                                className="flex items-center space-x-2 text-sm bg-secondary hover:bg-muted text-secondary-foreground font-semibold py-2 px-3 rounded-md transition-colors"
-                                title="Cambia account Google"
-                            >
-                                <RefreshCwIcon className="h-4 w-4" />
-                                <span className="hidden sm:inline">Cambia Account Google</span>
-                            </button>
+                            <div className="flex items-center space-x-2">
+                                <button
+                                    onClick={handleSwitchAccount}
+                                    className="flex items-center space-x-2 text-sm bg-secondary hover:bg-muted text-secondary-foreground font-semibold py-2 px-3 rounded-md transition-colors"
+                                    title="Cambia account Google"
+                                >
+                                    <RefreshCwIcon className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Cambia Account</span>
+                                </button>
+                                <button
+                                    onClick={() => gcal.logout()}
+                                    className="text-xs text-muted-foreground hover:text-destructive underline px-2 py-1 transition-colors cursor-pointer"
+                                    title="Disconnetti account"
+                                >
+                                    Disconnetti
+                                </button>
+                            </div>
                         </div>
 
                         {/* Event Specific Calendar Mapping */}

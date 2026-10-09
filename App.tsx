@@ -9,6 +9,7 @@ import { MassiveEditView } from './components/MassiveEditView';
 import { HelpModal } from './components/HelpModal';
 import { SettingsModal } from './components/SettingsModal';
 import readmeContent from './README.md?raw';
+import * as gcal from './services/googleCalendarService';
 
 export default function App() {
   const [page, setPage] = useState<'dashboard' | 'import' | 'cleanup' | 'massive-edit'>('dashboard');
@@ -19,6 +20,11 @@ export default function App() {
   const [appDescription, setAppDescription] = useState<string>('Una suite intelligente basata su IA per popolare e pulire i tuoi calendari.');
 
   useEffect(() => {
+    // Inizializza GAPI e ripristina la sessione Google salvata
+    gcal.initGapiClient().catch(err => {
+      console.warn("GAPI init in App:", err);
+    });
+
     const loadMetadata = async () => {
       try {
         const response = await fetch('./metadata.json');

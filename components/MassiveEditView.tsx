@@ -52,24 +52,6 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const handleGapiLoad = useCallback(async () => {
-        try {
-            await gcal.initGapiClient();
-        } catch (err: any) {
-            setError({ title: 'Errore di Inizializzazione', message: err.message });
-            setGCalState('error');
-        }
-    }, []);
-
-    useEffect(() => {
-        const script = document.createElement('script');
-        script.src = 'https://apis.google.com/js/api.js';
-        script.onload = () => (window as any).gapi.load('client', handleGapiLoad);
-        script.async = true;
-        document.body.appendChild(script);
-        return () => { document.body.removeChild(script); };
-    }, [handleGapiLoad]);
-
     const fetchInitialData = useCallback(async () => {
         try {
             const userInfoResponse = await gcal.getUserProfile();
@@ -88,6 +70,57 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
             setGCalState('error');
         }
     }, []);
+
+    const handleGapiLoad = useCallback(async () => {
+        try {
+            await gcal.initGapiClient();
+            if (gcal.hasValidSession()) {
+                setGCalState('loading');
+                await fetchInitialData();
+            } else {
+                setGCalState('initial');
+            }
+        } catch (err: any) {
+            setError({ title: 'Errore di Inizializzazione', message: err.message });
+            setGCalState('error');
+        }
+    }, [fetchInitialData]);
+
+    useEffect(() => {
+        if ((window as any).gapi?.client) {
+            handleGapiLoad();
+            return;
+        }
+        if ((window as any).gapi) {
+            (window as any).gapi.load('client', handleGapiLoad);
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://apis.google.com/js/api.js';
+        script.onload = () => (window as any).gapi?.load('client', handleGapiLoad);
+        script.async = true;
+        document.body.appendChild(script);
+        return () => { 
+            if (document.body.contains(script)) {
+                document.body.removeChild(script); 
+            }
+        };
+    }, [handleGapiLoad]);
+
+    // Ascolta i cambiamenti di sessione
+    useEffect(() => {
+        const handleSessionChange = () => {
+            if (!gcal.hasValidSession()) {
+                setUser(null);
+                setCalendars([]);
+                setSelectedCalendarIds(new Set());
+                setEvents([]);
+                setGCalState('initial');
+            }
+        };
+        window.addEventListener('forma_gcal_session_change', handleSessionChange);
+        return () => window.removeEventListener('forma_gcal_session_change', handleSessionChange);
+    }, []);
     
     const handleTokenResponse = useCallback(async (tokenResponse: any) => {
         if (tokenResponse.error) {
@@ -96,7 +129,8 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
             return;
         }
         if (tokenResponse.access_token) {
-            (window as any).gapi.client.setToken(tokenResponse);
+            gcal.saveTokenSession(tokenResponse);
+            (window as any).gapi?.client?.setToken(tokenResponse);
             setGCalState('loading');
             await fetchInitialData();
         }
@@ -309,8 +343,15 @@ export const MassiveEditView: React.FC<MassiveEditViewProps> = ({ setPage }) => 
 
     return (
         <div className="animate-fade-in space-y-6 max-w-5xl mx-auto">
-            <div className="text-center">
-                 <p className="text-muted-foreground">Accesso effettuato come <span className="font-semibold text-foreground">{user?.email}</span></p>
+            <div className="text-center flex items-center justify-center space-x-2">
+                 <p className="text-muted-foreground text-sm">Accesso effettuato come <span className="font-semibold text-foreground">{user?.email}</span></p>
+                 <button
+                     onClick={() => gcal.logout()}
+                     className="text-xs text-muted-foreground hover:text-destructive underline ml-2 transition-colors cursor-pointer"
+                     title="Disconnetti account Google"
+                 >
+                     Disconnetti
+                 </button>
             </div>
 
             {/* Error Message */}

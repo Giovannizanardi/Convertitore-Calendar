@@ -17,9 +17,131 @@ const SCOPES = 'https://www.googleapis.com/auth/calendar https://www.googleapis.
 
 declare var window: any;
 
+const TOKEN_STORAGE_KEY = 'forma_gcal_oauth_token';
+const USER_STORAGE_KEY = 'forma_gcal_user_profile';
+
 let tokenClient: any;
 let gapiInited = false;
 let gisInited = false;
+
+// Tipi per la sessione e il profilo
+export interface StoredTokenData {
+    access_token: string;
+    expires_at: number; // timestamp in millisecondi
+    token_type?: string;
+    scope?: string;
+}
+
+export interface UserProfile {
+    id?: string;
+    email?: string;
+    name?: string;
+    picture?: string;
+}
+
+// Salva il token OAuth ricevuto da Google con scadenza calcolata
+export const saveTokenSession = (tokenResponse: any) => {
+    if (!tokenResponse?.access_token) return;
+    const expiresInSec = Number(tokenResponse.expires_in) || 3600;
+    // Riserviamo 60s di margine per non utilizzare token in scadenza
+    const expiresAt = Date.now() + Math.max(expiresInSec - 60, 60) * 1000;
+    const tokenData: StoredTokenData = {
+        ...tokenResponse,
+        expires_at: expiresAt
+    };
+    try {
+        localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokenData));
+    } catch (e) {
+        console.warn('[Session] Impossibile salvare il token in localStorage:', e);
+    }
+};
+
+// Recupera il token salvato se ancora valido
+export const getStoredToken = (): StoredTokenData | null => {
+    try {
+        const raw = localStorage.getItem(TOKEN_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed.access_token || !parsed.expires_at) {
+            localStorage.removeItem(TOKEN_STORAGE_KEY);
+            return null;
+        }
+        // Se il token è scaduto o scade entro 30 secondi, invalidalo
+        if (parsed.expires_at <= Date.now() + 30000) {
+            localStorage.removeItem(TOKEN_STORAGE_KEY);
+            return null;
+        }
+        return parsed;
+    } catch (e) {
+        return null;
+    }
+};
+
+// Gestione profilo utente salvato
+export const saveUserProfile = (profile: UserProfile | null) => {
+    try {
+        if (profile) {
+            localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(profile));
+        } else {
+            localStorage.removeItem(USER_STORAGE_KEY);
+        }
+    } catch (e) {
+        console.warn('[Session] Impossibile salvare il profilo:', e);
+    }
+};
+
+export const getStoredUserProfile = (): UserProfile | null => {
+    try {
+        const raw = localStorage.getItem(USER_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+        return null;
+    }
+};
+
+// Verifica se esiste una sessione attiva e valida
+export const hasValidSession = (): boolean => {
+    return getStoredToken() !== null;
+};
+
+// Notifica i componenti di modifiche alla sessione
+export const notifySessionChange = () => {
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('forma_gcal_session_change'));
+    }
+};
+
+// Ripristina la sessione salvata in gapi.client se disponibile
+export const restoreSession = (): boolean => {
+    const token = getStoredToken();
+    if (token && (window as any).gapi?.client) {
+        (window as any).gapi.client.setToken(token);
+        return true;
+    }
+    return false;
+};
+
+// Logout ed eliminazione della sessione
+export const logout = () => {
+    const token = getStoredToken();
+    if (token?.access_token && (window as any).google?.accounts?.oauth2?.revoke) {
+        try {
+            (window as any).google.accounts.oauth2.revoke(token.access_token, () => {});
+        } catch (e) {
+            console.warn('Revoke warning:', e);
+        }
+    }
+    try {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+        localStorage.removeItem(USER_STORAGE_KEY);
+        if ((window as any).gapi?.client) {
+            (window as any).gapi.client.setToken(null);
+        }
+    } catch (e) {
+        console.warn('Errore pulizia sessione:', e);
+    }
+    notifySessionChange();
+};
 
 // Tipi per gli eventi di Google Calendar
 export interface GCalEvent {
@@ -34,7 +156,7 @@ export interface GCalEvent {
 }
 
 // Helper per attendere la disponibilità di un oggetto globale
-const waitForGlobal = <T>(name: string, timeout = 5000): Promise<T> => {
+const waitForGlobal = <T>(name: string, timeout = 7000): Promise<T> => {
     return new Promise((resolve, reject) => {
         let elapsed = 0;
         const interval = 100;
@@ -46,7 +168,6 @@ const waitForGlobal = <T>(name: string, timeout = 5000): Promise<T> => {
                 if (elapsed >= timeout) {
                     reject(new Error(`Timeout in attesa della disponibilità di ${name}.`));
                 } else {
-                    console.log(`Waiting for ${name}...`); 
                     setTimeout(check, interval); 
                 }
             }
@@ -59,20 +180,33 @@ const waitForGlobal = <T>(name: string, timeout = 5000): Promise<T> => {
 export const initGapiClient = (): Promise<void> => {
     return new Promise((resolve, reject) => {
         if (gapiInited) {
+            restoreSession();
             resolve();
             return;
         }
-        window.gapi.load('client', async () => {
-            try {
-                await window.gapi.client.init({
-                    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
-                });
-                gapiInited = true;
-                resolve();
-            } catch (error) {
-                reject(error);
-            }
-        });
+
+        const executeInit = () => {
+            (window as any).gapi.load('client', async () => {
+                try {
+                    await (window as any).gapi.client.init({
+                        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
+                    });
+                    gapiInited = true;
+                    restoreSession();
+                    resolve();
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        };
+
+        if ((window as any).gapi) {
+            executeInit();
+        } else {
+            waitForGlobal('gapi', 6000)
+                .then(executeInit)
+                .catch(reject);
+        }
     });
 };
 
@@ -89,15 +223,24 @@ const initGisClient = (callback: (tokenResponse: any) => void): Promise<void> =>
         }
         
         try {
-            await waitForGlobal('google');
+            await waitForGlobal('google', 6000);
         } catch (e: any) {
             return reject(new Error(`Impossibile caricare la libreria di autenticazione di Google: ${e.message}`));
         }
         
-        tokenClient = window.google.accounts.oauth2.initTokenClient({
+        tokenClient = (window as any).google.accounts.oauth2.initTokenClient({
             client_id: GOOGLE_CLIENT_ID,
             scope: SCOPES,
-            callback: callback,
+            callback: (tokenResponse: any) => {
+                if (tokenResponse?.access_token) {
+                    saveTokenSession(tokenResponse);
+                    if ((window as any).gapi?.client) {
+                        (window as any).gapi.client.setToken(tokenResponse);
+                    }
+                    notifySessionChange();
+                }
+                callback(tokenResponse);
+            },
         });
         gisInited = true;
         resolve();
@@ -106,17 +249,26 @@ const initGisClient = (callback: (tokenResponse: any) => void): Promise<void> =>
 
 export const handleAuthClick = async (callback: (tokenResponse: any) => void, promptType: 'consent' | 'select_account' | '' = 'consent') => {
     await initGisClient(callback);
-    tokenClient.requestAccessToken({prompt: promptType});
+    tokenClient.requestAccessToken({ prompt: promptType });
 };
 
 export const handleSilentAuth = async (callback: (tokenResponse: any) => void) => {
+    // Prima controlla se abbiamo già un token valido salvato
+    const stored = getStoredToken();
+    if (stored) {
+        if ((window as any).gapi?.client) {
+            (window as any).gapi.client.setToken(stored);
+        }
+        callback(stored);
+        return;
+    }
     await handleAuthClick(callback, ''); 
 };
 
 
 // List user's calendars
 export const listCalendars = async () => {
-    const response = await window.gapi.client.calendar.calendarList.list({});
+    const response = await (window as any).gapi.client.calendar.calendarList.list({});
     const calendars = response.result.items.sort((a: any, b: any) => {
         if (a.primary) return -1;
         if (b.primary) return 1;
@@ -127,9 +279,14 @@ export const listCalendars = async () => {
 
 // Get user's profile information
 export const getUserProfile = async () => {
-     return await window.gapi.client.request({
+    const response = await (window as any).gapi.client.request({
         'path': 'https://www.googleapis.com/oauth2/v2/userinfo'
-     });
+    });
+    if (response?.result?.email) {
+        saveUserProfile(response.result);
+        notifySessionChange();
+    }
+    return response;
 };
 
 
